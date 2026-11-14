@@ -1,0 +1,112 @@
+[
+  {
+    "name": "Original",
+    "contrast": 1,
+    "saturation": 1,
+    "red": 0,
+    "green": 0,
+    "blue": 0,
+    "grain": 0,
+    "softFocus": 0
+  },
+  {
+    "name": "Wedding Glow",
+    "contrast": 0.89,
+    "saturation": 0.91,
+    "red": 20,
+    "green": 16,
+    "blue": 18,
+    "grain": 0,
+    "softFocus": 0
+  },
+  {
+    "name": "Romantic",
+    "contrast": 0.94,
+    "saturation": 0.92,
+    "red": 18,
+    "green": 8,
+    "blue": 5,
+    "grain": 0,
+    "softFocus": 0
+  },
+  {
+    "name": "Soft Pastel",
+    "contrast": 0.78,
+    "saturation": 0.72,
+    "red": 18,
+    "green": 16,
+    "blue": 24,
+    "grain": 0,
+    "softFocus": 0
+  },
+  {
+    "name": "Golden Hour",
+    "contrast": 1.05,
+    "saturation": 1.12,
+    "red": 23,
+    "green": 7,
+    "blue": -17,
+    "grain": 0,
+    "softFocus": 0
+  },
+  {
+    "name": "Classic Film",
+    "contrast": 0.87,
+    "saturation": 0.71,
+    "red": 8,
+    "green": 5,
+    "blue": 0,
+    "grain": 9,
+    "softFocus": 0
+  },
+  {
+    "name": "Vintage Brown",
+    "contrast": 0.91,
+    "saturation": 0.23,
+    "red": 24,
+    "green": 7,
+    "blue": -16,
+    "grain": 4,
+    "softFocus": 0
+  },
+  {
+    "name": "Black & White",
+    "contrast": 1.19,
+    "saturation": 0,
+    "red": 0,
+    "green": 0,
+    "blue": 0,
+    "grain": 0,
+    "softFocus": 0
+  },
+  {
+    "name": "Dreamy",
+    "contrast": 0.81,
+    "saturation": 0.84,
+    "red": 18,
+    "green": 15,
+    "blue": 26,
+    "grain": 0,
+    "softFocus": 0.16
+  },
+  {
+    "name": "Moody",
+    "contrast": 1.18,
+    "saturation": 0.77,
+    "red": -12,
+    "green": -13,
+    "blue": -6,
+    "grain": 0,
+    "softFocus": 0
+  },
+  {
+    "name": "Retro 90s",
+    "contrast": 0.82,
+    "saturation": 0.86,
+    "red": 16,
+    "green": 6,
+    "blue": 17,
+    "grain": 13,
+    "softFocus": 0
+  }
+]

@@ -1,0 +1,9 @@
+data/
+.env
+.env.*
+!.env.example
+tests/
+test-results/
+docs/screenshots/
+*.log
+*.tsbuildinfo

@@ -1,0 +1,46 @@
+{
+  "name": "vows-views",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0 <23 || >=24"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"node --experimental-sqlite --watch server/index.js --development\" \"vite\"",
+    "build": "tsc -b && vite build",
+    "start": "node --experimental-sqlite server/index.js",
+    "test": "node --experimental-sqlite --test --test-concurrency=1 tests/*.test.js",
+    "admin:create": "node --experimental-sqlite server/create-admin.js",
+    "db:init": "node --experimental-sqlite server/init-db.js",
+    "db:check": "node --experimental-sqlite server/check-db.js",
+    "check": "npm run build && npm test",
+    "format": "prettier --write src server tests vite.config.ts tsconfig.json package.json index.html"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "@vercel/blob": "2.4.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.4",
+    "helmet": "^8.3.0",
+    "lucide-react": "^1.72.0",
+    "multer": "^2.5.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^10.0.7",
+    "prettier": "^3.10.1",
+    "supertest": "^7.3.2",
+    "typescript": "^7.0.2",
+    "vite": "^6.4.6"
+  }
+}
