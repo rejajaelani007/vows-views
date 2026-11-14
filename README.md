@@ -160,6 +160,12 @@ sebelum memakai data tamu sebenarnya.
 
 ## Verifikasi
 
+Di **Dashboard → Theme Settings**, pilih project, lalu pilih salah satu dari 10 desain. Pratinjau menampilkan halaman pada lebar 390, 768, atau 1200 px. Cover, potret pasangan, latar, ornamen, nama, warna, font dan tombol kamera dapat diubah bersama. **Apply Theme** dan **Save Changes** menerbitkan seluruh draf untuk project terpilih. **Cancel** membuang draf; **Reset Theme** menyiapkan tampilan awal untuk disimpan, sambil mempertahankan konten acara dan foto pasangan. Pengaturan tema tidak mengubah filter atau kuota kamera.
+
+Konfigurasi berada di `projects.event_json`, aset di `project_images`. Database SQLite lokal dimigrasikan saat startup. Untuk instalasi Turso lama, jalankan `npm run db:init` pada database target sebelum merilis versi ini agar slot potret pasangan tersedia. Lihat [panduan Vercel](docs/VERCEL.md).
+
+Banner siap dibagikan: [Story/Status 1080 × 1920](docs/promosi/vows-views-story-status.png) dan [Feed 1080 × 1350](docs/promosi/vows-views-feed-portrait.png). Harga dan tujuan QR demo berasal dari banner referensi. Untuk mengisi placeholder kontak, setel `PROMO_WHATSAPP` lalu jalankan `node scripts/render-promotions.mjs`. Foto ilustrasi lokal digunakan pada kedua banner dan sebagai sampul bawaan koleksi tema baru.
+
 ```powershell
 npm run build
 npm test

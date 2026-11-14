@@ -41,6 +41,7 @@ import {
 } from './lib';
 import type { WeddingEvent, GuestSession, Photo, PhotoList } from './types';
 import { prepareUpload } from './upload-image';
+import { editorial, Motif, original, pageTheme, themes, themeStyle } from './wedding-theme';
 
 const hero =
   'https://images.unsplash.com/photo-1617202000199-15fab1b09935?auto=format&fit=crop&w=1600&q=85';
@@ -48,8 +49,11 @@ export function GuestApp() {
   const { path } = useRouter();
   const { event } = useEvent();
   return (
-    <div className="guest-app" style={{ '--rose': event?.theme } as React.CSSProperties}>
-      <GuestHeader />
+    <div
+      className={`guest-app ${path === '/' ? pageTheme(event) : ''}`}
+      style={path === '/' ? themeStyle(event) : undefined}
+    >
+      <GuestHeader event={event} />
       {path === '/' ? (
         <Landing />
       ) : path === '/gallery' ? (
@@ -74,9 +78,15 @@ export function GuestApp() {
     </div>
   );
 }
-function GuestHeader() {
-  const { path } = useRouter(),
-    { event } = useEvent();
+export function GuestHeader({
+  event,
+  preview = false,
+}: {
+  event: WeddingEvent | null;
+  preview?: boolean;
+}) {
+  const { path: actualPath } = useRouter(),
+    path = preview ? '/' : actualPath;
   return (
     <header className="guest-header">
       <div className="header-inner">
@@ -97,7 +107,7 @@ function GuestHeader() {
         </nav>
         <Link to="/camera" className="btn btn-small btn-primary">
           <Camera size={16} />
-          <span>Take your photo</span>
+          <span>{event?.appearance.buttonLabel || original.buttonLabel}</span>
         </Link>
       </div>
       <div className="event-ribbon">
@@ -137,18 +147,43 @@ function Landing() {
     return () => controller.abort();
   }, []);
   return (
-    <main>
-      <LandingHero
-        event={event}
-        notice={
-          quota === null
-            ? ''
-            : quota === 0
-              ? quotaDone
-              : `Selamat datang! Anda mendapatkan kesempatan mengambil maksimal ${quota} foto.`
-        }
-      />
+    <LandingContent
+      event={event}
+      latest={latest}
+      photoError={photoError}
+      onSelect={setSelected}
+      notice={
+        quota === null
+          ? ''
+          : quota === 0
+            ? quotaDone
+            : `Selamat datang! Anda mendapatkan kesempatan mengambil maksimal ${quota} foto.`
+      }
+    >
       {error && <ErrorBox message={error} retry={refresh} />}
+      {selected && <PhotoViewer photo={selected} onClose={() => setSelected(null)} />}
+    </LandingContent>
+  );
+}
+export function LandingContent({
+  event,
+  latest,
+  photoError = '',
+  onSelect = () => {},
+  notice = '',
+  children,
+}: {
+  event: WeddingEvent | null;
+  latest: PhotoList | null;
+  photoError?: string;
+  onSelect?: (p: Photo) => void;
+  notice?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <main>
+      <LandingHero event={event} notice={notice} />
+      {children}
       {event?.images.banner && (
         <img className="event-banner" src={event.images.banner} alt="Banner acara" />
       )}
@@ -206,7 +241,7 @@ function Landing() {
         ) : latest === null ? (
           <Spinner />
         ) : latest.photos.length ? (
-          <PhotoGrid photos={latest.photos} onSelect={setSelected} />
+          <PhotoGrid photos={latest.photos} onSelect={onSelect} />
         ) : (
           <div className="empty-gallery-preview">
             <ImageIcon size={34} strokeWidth={1} />
@@ -230,22 +265,29 @@ function Landing() {
         </p>
         <Heart size={17} strokeWidth={1.2} />
       </section>
-      {selected && <PhotoViewer photo={selected} onClose={() => setSelected(null)} />}
     </main>
   );
 }
 
 export function LandingHero({ event, notice }: { event: WeddingEvent | null; notice?: string }) {
+  const a = event?.appearance ?? original;
+  const preset = themes.find((t) => t.id === a.preset);
   return (
     <section
-      className={'hero-section position-' + (event?.position || 'left')}
+      className={
+        'hero-section position-' + (event?.position || 'left') + (preset ? ' designed-hero' : '')
+      }
+      data-ornament={a.ornament}
       style={{
         backgroundImage: event?.images.background
-          ? `linear-gradient(#ffffffb3,#ffffffb3),url("${event.images.background}")`
+          ? `linear-gradient(${a.background}d9,${a.background}a8),url("${event.images.background}")`
           : undefined,
       }}
     >
       <div className="hero-copy">
+        {(preset || a.ornament === 'floral') && a.ornament !== 'none' && (
+          <Motif id={a.ornament === 'floral' ? 'floral' : a.preset} />
+        )}
         <div className="eyebrow">
           <span /> {event?.title || 'The wedding of'} <span />
         </div>
@@ -257,14 +299,18 @@ export function LandingHero({ event, notice }: { event: WeddingEvent | null; not
             <Heart size={24} strokeWidth={1} />
           </span>
         </h1>
-        <p className="hero-tagline">Our day. Your perspective.</p>
+        <p className="hero-tagline">
+          {preset && event?.wedding_date
+            ? weddingDate(event.wedding_date)
+            : 'Our day. Your perspective.'}
+        </p>
         <p className="hero-description">
           {event?.welcome_message ||
             'Setiap senyum, setiap pelukan, setiap momen kecil. Abadikan kebahagiaan hari ini bersama kami.'}
         </p>
         <div className="hero-actions">
           <Link to="/camera" className="btn btn-primary">
-            <Camera size={18} /> Take your photo <ArrowRight size={17} />
+            <Camera size={18} /> {a.buttonLabel || original.buttonLabel} <ArrowRight size={17} />
           </Link>
           <Link to="/gallery" className="btn btn-outline">
             <ImageIcon size={17} /> View gallery
@@ -283,8 +329,8 @@ export function LandingHero({ event, notice }: { event: WeddingEvent | null; not
       <div className="hero-visual">
         <div className="photo-arch">
           <img
-            src={event?.images.hero || hero}
-            alt="Pasangan pengantin berbagi momen bahagia di taman"
+            src={event?.images.hero || (preset ? editorial : hero)}
+            alt="Foto sampul pernikahan"
             fetchPriority="high"
           />
           <div className="hero-photo-shade" />
@@ -294,9 +340,12 @@ export function LandingHero({ event, notice }: { event: WeddingEvent | null; not
             <i>a lifetime of memories.</i>
           </div>
         </div>
-        {event?.images.decoration ? (
+        {event?.images.couple && (
+          <img className="couple-inset" src={event.images.couple} alt="Potret pasangan pengantin" />
+        )}
+        {a.ornament === 'none' ? null : event?.images.decoration ? (
           <img className="event-decoration" src={event.images.decoration} alt="" />
-        ) : (
+        ) : !preset && !event?.images.couple ? (
           <div className="forever-seal">
             <Heart size={20} />
             <span>
@@ -307,7 +356,7 @@ export function LandingHero({ event, notice }: { event: WeddingEvent | null; not
               PLACE TO BE
             </span>
           </div>
-        )}
+        ) : null}
         <span className="hero-side-note">EST. A LIFETIME OF LOVE</span>
       </div>
       <a className="scroll-hint" href="#how-it-works">

@@ -1,4 +1,5 @@
 export interface WeddingEvent {
+  appearance: Appearance;
   title: string;
   theme: string;
   position: 'left' | 'center' | 'right';
@@ -11,7 +12,16 @@ export interface WeddingEvent {
   venue: string;
   welcome_message: string;
 }
-export type ImageSlot = 'background' | 'hero' | 'logo' | 'decoration' | 'banner';
+export interface Appearance {
+  preset: string;
+  background: string;
+  font: 'classic' | 'book' | 'modern' | 'retro';
+  ornament: 'signature' | 'floral' | 'none';
+  scale: number;
+  button: 'soft' | 'square' | 'pill';
+  buttonLabel: string;
+}
+export type ImageSlot = 'background' | 'hero' | 'logo' | 'decoration' | 'banner' | 'couple';
 export interface Project {
   id: string;
   owner_id: string;

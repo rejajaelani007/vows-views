@@ -9,7 +9,29 @@ export const filterNames = JSON.parse(
 )
   .filter((p) => p.name !== 'Original')
   .map((p) => p.name);
-const slots = ['hero', 'background', 'banner', 'decoration', 'logo'];
+const catalog = JSON.parse(readFileSync(new URL('./wedding-themes.json', import.meta.url), 'utf8'));
+const hex = z.string().regex(/^#[a-fA-F0-9]{6}$/);
+const appearance = z
+  .object({
+    preset: z.enum(['original', ...catalog.map((t) => t.id)]),
+    background: hex,
+    font: z.enum(['classic', 'modern', 'book', 'retro']),
+    ornament: z.enum(['signature', 'floral', 'none']),
+    scale: z.number().int().min(75).max(115),
+    button: z.enum(['soft', 'pill', 'square']),
+    buttonLabel: z.string().trim().min(1).max(32),
+  })
+  .strict();
+const original = {
+  preset: 'original',
+  background: '#fbf8f3',
+  font: 'classic',
+  ornament: 'signature',
+  scale: 100,
+  button: 'soft',
+  buttonLabel: 'Take your photo',
+};
+const slots = ['hero', 'background', 'banner', 'decoration', 'logo', 'couple'];
 const slotType = z.enum(slots);
 export const slug = z
   .string()
@@ -69,6 +91,7 @@ export async function readEvent(db, projectId, base) {
     title: 'The wedding of',
     theme: '#9c5363',
     position: 'left',
+    appearance: original,
     ...JSON.parse(project?.event_json || '{}'),
     filters: JSON.parse(project?.filters_json || 'null') ?? filterNames,
     images: Object.fromEntries(
@@ -216,11 +239,12 @@ export function managementRoutes(app, db, eventInput) {
   });
   const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { files: 5, fields: 1, parts: 7, fileSize: 700000, fieldSize: 8000 },
+    limits: { files: 6, fields: 1, parts: 8, fileSize: 700000, fieldSize: 8000 },
   }).fields(slots.map((name) => ({ name, maxCount: 1 })));
   const landing = eventInput.extend({
     title: projectName,
-    theme: z.string().regex(/^#[a-fA-F0-9]{6}$/),
+    theme: hex,
+    appearance: appearance.optional(),
     position: z.enum(['left', 'center', 'right']),
     revision: z.number().int().nonnegative(),
     remove: z.array(slotType).default([]),
@@ -257,8 +281,13 @@ export function managementRoutes(app, db, eventInput) {
         .run(
           JSON.stringify(
             req.project.id === 'legacy'
-              ? { title: v.title, theme: v.theme, position: v.position }
-              : v,
+              ? {
+                  title: v.title,
+                  theme: v.theme,
+                  position: v.position,
+                  appearance: v.appearance ?? JSON.parse(req.project.event_json).appearance,
+                }
+              : { ...v, appearance: v.appearance ?? JSON.parse(req.project.event_json).appearance },
           ),
           req.project.id,
           revision,

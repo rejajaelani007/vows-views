@@ -1,0 +1,112 @@
+[
+  {
+    "id": "javanese-modern",
+    "name": "Javanese Modern Wedding",
+    "edition": "Kawung & gebyok",
+    "description": "Ukiran kayu, batik kawung, dan bingkai gebyok.",
+    "accent": "#795337",
+    "background": "#f4ead6",
+    "position": "left",
+    "font": "classic",
+    "button": "soft"
+  },
+  {
+    "id": "royal-javanese",
+    "name": "Royal Javanese Wedding",
+    "edition": "Pendopo keraton",
+    "description": "Bingkai bertingkat dan mahkota emas di atas marun.",
+    "accent": "#e2bc70",
+    "background": "#401e24",
+    "position": "center",
+    "font": "classic",
+    "button": "square"
+  },
+  {
+    "id": "sundanese",
+    "name": "Sundanese Wedding",
+    "edition": "Untaian melati",
+    "description": "Siluet siger dan melati menaungi potret oval.",
+    "accent": "#476952",
+    "background": "#edf3e8",
+    "position": "right",
+    "font": "book",
+    "button": "pill"
+  },
+  {
+    "id": "minang-royal",
+    "name": "Minang Royal Wedding",
+    "edition": "Gonjong & songket",
+    "description": "Atap gonjong dan jalur songket merah keemasan.",
+    "accent": "#e4b366",
+    "background": "#321f22",
+    "position": "left",
+    "font": "classic",
+    "button": "square"
+  },
+  {
+    "id": "modern-luxury",
+    "name": "Modern Luxury Wedding",
+    "edition": "Édition champagne",
+    "description": "Kolom editorial, garis emas, dan potret tinggi.",
+    "accent": "#866840",
+    "background": "#faf4e8",
+    "position": "right",
+    "font": "book",
+    "button": "square"
+  },
+  {
+    "id": "minimalist",
+    "name": "Minimalist Wedding",
+    "edition": "Studio putih",
+    "description": "Ruang putih, huruf sederhana, dan foto tanpa bingkai.",
+    "accent": "#484640",
+    "background": "#faf9f6",
+    "position": "left",
+    "font": "modern",
+    "button": "square"
+  },
+  {
+    "id": "romantic-floral",
+    "name": "Romantic Floral Wedding",
+    "edition": "Taman peony",
+    "description": "Roset bertumpuk, bingkai kelopak, dan blush lembut.",
+    "accent": "#9b4d64",
+    "background": "#faeaeb",
+    "position": "center",
+    "font": "classic",
+    "button": "pill"
+  },
+  {
+    "id": "garden",
+    "name": "Garden Wedding",
+    "edition": "Di bawah sulur",
+    "description": "Daun zaitun memanjat di sekeliling jendela taman.",
+    "accent": "#4c633b",
+    "background": "#edf0df",
+    "position": "left",
+    "font": "book",
+    "button": "soft"
+  },
+  {
+    "id": "vintage-classic",
+    "name": "Vintage Classic Wedding",
+    "edition": "Album kenangan",
+    "description": "Cetakan sepia, kertas bertekstur, dan sudut album.",
+    "accent": "#795638",
+    "background": "#f0e4cb",
+    "position": "left",
+    "font": "retro",
+    "button": "square"
+  },
+  {
+    "id": "korean-romantic",
+    "name": "Korean Romantic Wedding",
+    "edition": "Surat musim semi",
+    "description": "Bunga mungil, potret pita, dan ruang pastel.",
+    "accent": "#935e70",
+    "background": "#faf2f1",
+    "position": "center",
+    "font": "modern",
+    "button": "pill"
+  }
+]

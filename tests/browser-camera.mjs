@@ -205,6 +205,75 @@ try {
   await call('Emulation.clearDeviceMetricsOverride');
   await login('studio');
   assert.equal(await evaluate('!!document.querySelector(\'a[href="/admin/users"]\')'), false);
+  await click('document.querySelector(\'a[href="/admin/themes"]\')');
+  const previewDoc = "document.querySelector('.proof iframe').contentDocument";
+  const publicEvent = async () =>
+    await (await fetch(origin + '/api/invites/studio/akad/event')).json();
+  const initialTheme = await publicEvent();
+  const themes = JSON.parse(
+    await readFile(new URL('../server/wedding-themes.json', import.meta.url), 'utf8'),
+  );
+  await wait("document.querySelectorAll('.theme-shelf button').length===10");
+  for (const [i, t] of themes.entries()) {
+    await click(`document.querySelectorAll('.theme-shelf button')[${i}]`);
+    for (const mode of ['Desktop', 'Tablet', 'Mobile']) {
+      await click(button(mode));
+      await wait(
+        `${previewDoc}.querySelector('.w-${t.id} .designed-hero .photo-arch img')?.naturalWidth>0`,
+      );
+      assert.equal(
+        await evaluate(
+          `${previewDoc}.documentElement.scrollWidth<=${previewDoc}.documentElement.clientWidth+1`,
+        ),
+        true,
+        t.id + ' ' + mode,
+      );
+      assert.equal(
+        await evaluate(`${previewDoc}.defaultView.innerWidth`),
+        { Desktop: 1200, Tablet: 768, Mobile: 390 }[mode],
+      );
+    }
+  }
+  assert.deepEqual(await publicEvent(), initialTheme, 'previews do not publish');
+  await click(button('Cancel'));
+  await wait(`!!${previewDoc}.querySelector('.w-original')`);
+  await click("document.querySelectorAll('.theme-shelf button')[7]");
+  await evaluate(`(()=>{const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
+    for(const [label,v] of [['Warna background','#f2e5d5'],['Teks tombol Take Photo','Potret bersama']]){
+      const el=[...document.querySelectorAll('label')].find(l=>l.textContent.trim()===label).querySelector('input');
+      set.call(el,v);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));
+    }})()`);
+  await wait(
+    `${previewDoc}.querySelector('.hero-actions .btn-primary')?.textContent.trim()==='Potret bersama' && ${previewDoc}.defaultView.getComputedStyle(${previewDoc}.querySelector('.w-garden')).backgroundColor==='rgb(242, 229, 213)'`,
+  );
+  assert.deepEqual(await publicEvent(), initialTheme);
+  if (process.env.THEME_QA_DIR) {
+    const { mkdir } = await import('node:fs/promises');
+    await mkdir(process.env.THEME_QA_DIR, { recursive: true });
+    const shot = await call('Page.captureScreenshot', { format: 'jpeg', quality: 80 });
+    await writeFile(
+      join(process.env.THEME_QA_DIR, 'theme-settings.jpg'),
+      Buffer.from(shot.data, 'base64'),
+    );
+  }
+  await click(button('Apply Theme'));
+  await until(async () => (await publicEvent()).appearance.preset === 'garden', 'apply theme');
+  assert.equal((await publicEvent()).appearance.buttonLabel, 'Potret bersama');
+  await wait(
+    "!Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Save Changes') || Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Save Changes').disabled",
+  );
+  await call('Page.reload');
+  await wait(
+    `!!document.querySelector('.proof iframe')?.contentDocument.querySelector('.w-garden')`,
+  );
+  await click(button('Reset Theme'));
+  await wait(`!!${previewDoc}.querySelector('.w-original')`);
+  assert.equal((await publicEvent()).appearance.preset, 'garden');
+  await click(button('Save Changes'));
+  await until(async () => (await publicEvent()).appearance.preset === 'original', 'save reset');
+  console.log(
+    'PASS: ten themes at three viewport sizes, live colors/CTA, cancel/apply/reset, persistence and publication.',
+  );
   await click('document.querySelector(\'a[href="/admin/settings"]\')');
   await wait("!!document.querySelector('.asset-grid input')");
   const cover = join(dir, 'cover.jpg');

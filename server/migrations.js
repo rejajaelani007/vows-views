@@ -56,5 +56,27 @@ export async function migrateDatabase(db) {
       )
       .run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_qr_project ON qr_codes(project_id)').run();
+    const images = await db
+      .prepare("SELECT sql FROM sqlite_master WHERE name='project_images'")
+      .get();
+    if (images && !images.sql.includes("'couple'")) {
+      await db
+        .prepare('ALTER TABLE project_images RENAME TO project_images_before_portraits')
+        .run();
+      await db
+        .prepare(
+          `CREATE TABLE project_images (
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        slot TEXT NOT NULL CHECK(slot IN ('hero','background','banner','decoration','logo','couple')),
+        jpeg BLOB NOT NULL, PRIMARY KEY(project_id,slot))`,
+        )
+        .run();
+      await db
+        .prepare(
+          'INSERT INTO project_images SELECT project_id,slot,jpeg FROM project_images_before_portraits',
+        )
+        .run();
+      await db.prepare('DROP TABLE project_images_before_portraits').run();
+    }
   });
 }

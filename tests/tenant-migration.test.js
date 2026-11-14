@@ -5,6 +5,56 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openDatabase } from '../server/db.js';
+import { migrateDatabase } from '../server/migrations.js';
+
+test('adding the couple portrait slot retains old cover bytes and the saved theme after reopening', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'theme-upgrade-'));
+  let db;
+  try {
+    db = await openDatabase(dir, { url: '', serverless: false });
+    await db
+      .prepare(
+        "INSERT INTO admins(id,email,password_hash,username) VALUES('owner','owner@example.org','fixture','studio')",
+      )
+      .run();
+    await db.prepare('DROP TABLE project_images').run();
+    await db
+      .prepare(
+        `CREATE TABLE project_images(project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      slot TEXT NOT NULL CHECK(slot IN ('hero','background','banner','decoration','logo')),jpeg BLOB NOT NULL,PRIMARY KEY(project_id,slot))`,
+      )
+      .run();
+    await db.prepare("INSERT INTO project_images VALUES('legacy','hero',X'123456')").run();
+    await migrateDatabase(db);
+    await db.prepare("INSERT INTO project_images VALUES('legacy','couple',X'ABCDEF')").run();
+    await db
+      .prepare("UPDATE projects SET event_json=? WHERE id='legacy'")
+      .run(JSON.stringify({ appearance: { preset: 'garden' } }));
+    db.close();
+    db = await openDatabase(dir, { url: '', serverless: false });
+    const rows = await db
+      .prepare(
+        "SELECT slot,hex(jpeg) AS bytes FROM project_images WHERE project_id='legacy' ORDER BY slot",
+      )
+      .all();
+    assert.deepEqual(
+      rows.map((r) => [r.slot, r.bytes]),
+      [
+        ['couple', 'ABCDEF'],
+        ['hero', '123456'],
+      ],
+    );
+    assert.equal(
+      JSON.parse(
+        (await db.prepare("SELECT event_json FROM projects WHERE id='legacy'").get()).event_json,
+      ).appearance.preset,
+      'garden',
+    );
+  } finally {
+    db?.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
 
 test('pre-project SQLite records retain ownership, URL code, photo history and both quota counters on repeated startup', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'legacy-wedding-'));

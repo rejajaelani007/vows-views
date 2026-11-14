@@ -13,6 +13,7 @@ import {
 import { GuestApp } from './guest';
 import { AdminApp } from './admin';
 import './styles.css';
+import './themes.css';
 function App() {
   const { path } = useRouter();
   if (path === '/admin' || path.startsWith('/admin/')) return <AdminApp />;

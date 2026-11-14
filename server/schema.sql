@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
 CREATE TABLE IF NOT EXISTS project_images (
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  slot TEXT NOT NULL CHECK(slot IN ('hero','background','banner','decoration','logo')),
+  slot TEXT NOT NULL CHECK(slot IN ('hero','background','banner','decoration','logo','couple')),
   jpeg BLOB NOT NULL,
   PRIMARY KEY(project_id,slot)
 );

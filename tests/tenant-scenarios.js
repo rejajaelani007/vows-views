@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import sharp from 'sharp';
+import { readFileSync } from 'node:fs';
+const themes = JSON.parse(
+  readFileSync(new URL('../server/wedding-themes.json', import.meta.url), 'utf8'),
+);
 
 export async function tenantScenarios({
   admin,
@@ -111,6 +115,47 @@ export async function tenantScenarios({
   assert.equal(fresh.partner_one, 'Dimas');
   assert.equal(Object.keys(fresh.images).length, 5);
   assert.equal((await request(app).get(fresh.images.logo)).type, 'image/jpeg');
+  let revision = fresh.revision;
+  const otherProject = '/api/admin/projects/' + second + '/event';
+  const unchanged = (await studio.get(otherProject)).body;
+  for (const [index, t] of themes.entries()) {
+    const appearance = {
+      ...fresh.appearance,
+      preset: t.id,
+      background: t.background,
+      font: t.font,
+      button: t.button,
+      scale: 110,
+      buttonLabel: 'Ambil foto',
+    };
+    const action = index % 2 ? root : own;
+    const save = action('put', project + '/event').field(
+      'settings',
+      JSON.stringify({ ...event, theme: t.accent, position: t.position, appearance, revision }),
+    );
+    if (!index) save.attach('couple', image, 'potret.jpg');
+    await save.expect(200);
+    const published = (
+      await request(app)
+        .get(base + '/event')
+        .expect(200)
+    ).body;
+    assert.deepEqual(published.appearance, appearance);
+    assert.equal(published.theme, t.accent);
+    assert.equal(published.position, t.position);
+    assert.equal(published.revision, ++revision);
+    assert.equal((await request(app).get(published.images.couple)).type, 'image/jpeg');
+  }
+  const bad = { ...event, revision, appearance: { ...fresh.appearance, scale: 999 } };
+  await own('put', project + '/event')
+    .field('settings', JSON.stringify(bad))
+    .expect(400);
+  await own('put', '/projects/legacy/event').field('settings', JSON.stringify(event)).expect(404);
+  assert.deepEqual((await studio.get(otherProject)).body, unchanged);
+  const legacy = (await admin.get('/api/admin/projects/legacy/event')).body;
+  const active = { ...legacy, appearance: { ...legacy.appearance, preset: 'garden' } };
+  await root('put', '/projects/legacy/event').field('settings', JSON.stringify(active)).expect(200);
+  assert.equal((await request(app).get('/api/event')).body.appearance.preset, 'garden');
   await own('put', project + '/filters')
     .send({ filters: ['Dreamy'] })
     .expect(200);

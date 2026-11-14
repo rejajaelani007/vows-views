@@ -224,6 +224,7 @@ const menuItems = [
   { path: '/admin/usage', label: 'Usage & sessions', icon: Activity },
   { path: '/admin/photos', label: 'Photo library', icon: ImageIcon },
   { path: '/admin/settings', label: 'Landing Page Settings', icon: Settings },
+  { path: '/admin/themes', label: 'Theme Settings', icon: Pencil },
   { path: '/admin/filters', label: 'Camera Filter Settings', icon: Camera },
   { path: '/admin/system', label: 'System Settings', icon: Settings },
 ];
@@ -341,7 +342,7 @@ function AdminLayout({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
           </div>
         </header>
         <main className="admin-content">
-          {['/admin/settings', '/admin/filters'].includes(path) && projects.length > 0 && (
+          {['/admin/settings', '/admin/themes', '/admin/filters'].includes(path) && projects.length > 0 && (
             <label className="project-switch">
               Project
               <select value={current?.id} onChange={(e) => select(e.target.value)}>
@@ -367,13 +368,14 @@ function AdminLayout({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
             <UsagePage />
           ) : path === '/admin/photos' ? (
             <PhotoManagement csrf={auth.csrf} />
-          ) : ['/admin/settings', '/admin/filters'].includes(path) ? (
+          ) : ['/admin/settings', '/admin/themes', '/admin/filters'].includes(path) ? (
             current ? (
               <ProjectSettings
                 key={path + current.id}
                 project={current.id}
                 csrf={auth.csrf}
                 camera={path === '/admin/filters'}
+                themeEditor={path === '/admin/themes'}
               />
             ) : (
               <Link to="/admin/projects">Buat project pertama Anda</Link>
