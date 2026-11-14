@@ -164,7 +164,7 @@ Di **Dashboard → Theme Settings**, pilih project, lalu pilih salah satu dari 1
 
 Konfigurasi berada di `projects.event_json`, aset di `project_images`. Database SQLite lokal dimigrasikan saat startup. Untuk instalasi Turso lama, jalankan `npm run db:init` pada database target sebelum merilis versi ini agar slot potret pasangan tersedia. Lihat [panduan Vercel](docs/VERCEL.md).
 
-Banner siap dibagikan: [Story/Status 1080 × 1920](docs/promosi/vows-views-story-status.png) dan [Feed 1080 × 1350](docs/promosi/vows-views-feed-portrait.png). Harga dan tujuan QR demo berasal dari banner referensi. Untuk mengisi placeholder kontak, setel `PROMO_WHATSAPP` lalu jalankan `node scripts/render-promotions.mjs`. Foto ilustrasi lokal digunakan pada kedua banner dan sebagai sampul bawaan koleksi tema baru.
+Banner siap dibagikan: [Story/Status 1080 × 1920](docs/promosi/vows-views-story-status.png) dan [Feed 1080 × 1350](docs/promosi/vows-views-feed-portrait.png). Harga paket Rp 500 / satu limit foto digital. Kedua versi menggunakan file QR demo `wedding-qr-04eba327-8ade-4697-b363-6e85ae550138.png` dan WhatsApp studio +62 889-0596-6493. Jalankan `node scripts/render-promotions.mjs` untuk mengekspor ulang. Foto ilustrasi lokal digunakan pada kedua banner dan sebagai sampul bawaan koleksi tema baru.
 
 ```powershell
 npm run build

@@ -1,7 +1,5 @@
-/** Export both share cards. The price and demo URL come from the supplied reference;
- * set PROMO_WHATSAPP to an authorized contact when the brand supplies one. */
+/** Export both share cards with the studio's supplied demo QR and contact. */
 import sharp from 'sharp';
-import QRCode from 'qrcode';
 import { fileURLToPath } from 'node:url';
 import { mkdir, readFile } from 'node:fs/promises';
 const target = fileURLToPath(new URL('../docs/promosi/', import.meta.url));
@@ -10,8 +8,13 @@ const photo = await sharp(
 )
   .jpeg({ quality: 89 })
   .toBuffer();
-const demo = 'https://wedding-cam-gallery.vercel.app/';
-const qr = QRCode.create(demo, { errorCorrectionLevel: 'M' }).modules;
+const demoQrSize = 196; // 4 pixels per module, including the source image's white margin.
+const demoQr = await sharp(
+  fileURLToPath(new URL('../wedding-qr-04eba327-8ade-4697-b363-6e85ae550138.png', import.meta.url)),
+)
+  .resize(demoQrSize, demoQrSize, { kernel: 'nearest' })
+  .png()
+  .toBuffer();
 const wine = '#491d30',
   garnet = '#722e47',
   cream = '#fff8ed',
@@ -38,16 +41,6 @@ const bloom = (x, y, r) =>
   `<g transform="translate(${x} ${y})" fill="none" stroke="#bd9c79" stroke-width="1.8">${Array.from({ length: 8 }, (_, i) => `<ellipse cx="0" cy="${-r * 0.56}" rx="${r * 0.33}" ry="${r * 0.52}" transform="rotate(${i * 45})"/>`).join('')}<circle r="${r * 0.18}"/></g>`;
 function floral(x, y) {
   return `<g transform="translate(${x} ${y})"><path d="M0 78Q92 75 152 0M30 73Q30 42 61 40Q59 63 30 73M64 60Q89 65 106 46Q80 43 64 60" stroke="#b49673" fill="none" stroke-width="2.5"/>${bloom(110, 28, 22)}${bloom(139, 16, 12)}</g>`;
-}
-function qrBox(x, y, unit) {
-  const pad = 4 * unit,
-    n = qr.size,
-    w = (n + 8) * unit;
-  let d = '';
-  for (let r = 0; r < n; r++)
-    for (let c = 0; c < n; c++)
-      if (qr.get(r, c)) d += `M${pad + c * unit} ${pad + r * unit}h${unit}v${unit}h-${unit}z`;
-  return `<g transform="translate(${x} ${y})" shape-rendering="crispEdges">${rect(0, 0, w, w, '#fff')}<path d="${d}" fill="#21151c"/></g>`;
 }
 function phone(x, y, scale, dashboard = false) {
   let inside = '';
@@ -92,7 +85,7 @@ function bar(y) {
   return (
     rect(0, y, 1080, 66, wine) +
     label(55, y + 41, 'PAKET FOTO DIGITAL', { color: '#e6cbb5' }) +
-    serif(629, y + 45, 'Rp1.000 / foto', 39, { color: cream })
+    `<g text-anchor="end">${serif(1025, y + 45, 'Rp 500 / satu limit foto digital', 39, { color: cream })}</g>`
   );
 }
 function mast(y) {
@@ -103,18 +96,18 @@ function mast(y) {
   );
 }
 function footer(y, h, story) {
-  const unit = 5,
-    w = (qr.size + 8) * unit;
+  const qrLeft = 908 - demoQrSize / 2;
   return (
     rect(0, y, 1080, h, wine) +
     label(54, y + 43, 'COBA DEMO', { color: '#f2d3ac' }) +
     serif(54, y + 98, 'Buat kenangan pernikahanmu', 39, { color: cream }) +
     serif(54, y + 145, 'lebih berkesan!', 43, { color: cream, italic: true }) +
-    txt(55, y + 191, 'wedding-cam-gallery.vercel.app', 29, { color: cream }) +
-    txt(55, y + 228, 'WhatsApp: ' + (process.env.PROMO_WHATSAPP || '[kontak studio]'), 25, {
+    txt(55, y + 191, 'vv-wedding-memories.vercel.app', 29, { color: cream }) +
+    txt(55, y + 228, 'WhatsApp: ' + (process.env.PROMO_WHATSAPP || '+62 889-0596-6493'), 25, {
       color: '#f2d5d5',
     }) +
-    qrBox(1028 - w, y + 28, unit) +
+    `<g text-anchor="middle">${txt(908, y + 48, 'Pindai QR', 23, { bold: true, color: cream })}${txt(908, y + 68, '*Untuk demo memakai QR dibawah', 16, { color: '#d0c9cb' })}</g>` +
+    `<image x="${qrLeft}" y="${y + 76}" width="${demoQrSize}" height="${demoQrSize}" xlink:href="data:image/png;base64,${demoQr.toString('base64')}"/>` +
     (story ? floral(850, y + 275) : '')
   );
 }
@@ -147,18 +140,18 @@ function feed() {
     txt(56, 326, 'Scan QR dengan smartphone. Ambil foto tanpa instal aplikasi.', 30) +
     scene(353, 452) +
     bar(805) +
-    label(54, 914, '01  /  UNTUK TAMU') +
-    label(552, 914, '02  /  DASHBOARD ACARA') +
-    serif(54, 962, '10 filter kamera', 39) +
-    serif(552, 962, '10 tema pernikahan', 39) +
-    line(530, 899, 530, 1077, '#cebaa7') +
-    txt(54, 1001, 'Wedding Glow, Romantic, Vintage Brown,', 23) +
-    txt(54, 1033, 'Classic Film & lainnya. Kuota per tamu.', 23) +
-    txt(54, 1065, 'Kirim foto → otomatis masuk satu galeri.', 23) +
-    txt(552, 1001, 'Atur landing page, foto, dan background.', 23) +
-    txt(552, 1033, 'Sesuaikan tampilan dan kelola QR Code.', 23) +
-    txt(552, 1065, 'Lihat foto tamu dan kelola galeri digital.', 23) +
-    footer(1094, 256, false)
+    label(54, 904, '01  /  UNTUK TAMU') +
+    label(552, 904, '02  /  DASHBOARD ACARA') +
+    serif(54, 948, '10 filter kamera', 39) +
+    serif(552, 948, '10 tema pernikahan', 39) +
+    line(530, 892, 530, 1046, '#cebaa7') +
+    txt(54, 983, 'Wedding Glow, Romantic, Vintage Brown,', 23) +
+    txt(54, 1013, 'Classic Film & lainnya. Kuota per tamu.', 23) +
+    txt(54, 1043, 'Kirim foto → otomatis masuk satu galeri.', 23) +
+    txt(552, 983, 'Atur landing page, foto, dan background.', 23) +
+    txt(552, 1013, 'Sesuaikan tampilan dan kelola QR Code.', 23) +
+    txt(552, 1043, 'Lihat foto tamu dan kelola galeri digital.', 23) +
+    footer(1062, 288, false)
   );
 }
 await mkdir(target, { recursive: true });

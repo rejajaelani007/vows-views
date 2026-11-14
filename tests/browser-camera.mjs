@@ -137,6 +137,13 @@ try {
   await call('Page.navigate', { url: origin + '/studio/akad' });
   await wait("document.querySelector('.quota-notice')?.textContent.includes('11 foto')");
   await click("document.querySelector('.hero-actions a')");
+  await wait(`document.querySelectorAll('.filter-strip img').length===${filterNames.length + 1} &&
+    [...document.querySelectorAll('.filter-strip img')].every(img=>img.complete && img.naturalWidth>0)`);
+  assert.equal(
+    await evaluate("document.querySelectorAll('.filter-strip canvas, .filter-strip video').length"),
+    0,
+  );
+  assert.equal(await evaluate("document.querySelector('video').srcObject"), null);
   await click(button('Aktifkan kamera'));
   await wait(
     "document.querySelector('video')?.videoWidth>0 && !document.querySelector('.shutter')?.disabled",
@@ -153,6 +160,12 @@ try {
       });
     await click(button(name));
     if (index) await wait("document.querySelector('.live-filter')?.width>0");
+    assert.equal(
+      await evaluate(
+        "document.querySelectorAll('.camera-stage video.visible, .camera-stage canvas.live-filter').length",
+      ),
+      1,
+    );
     await click("document.querySelector('.shutter:not(:disabled)')");
     await wait("document.querySelector('.capture-preview')?.naturalWidth>0");
     const capture = await evaluate(
@@ -204,6 +217,39 @@ try {
   }
   await call('Emulation.clearDeviceMetricsOverride');
   await login('studio');
+  await wait("document.querySelectorAll('.overview-summaries .panel').length===2");
+  for (const width of [1440, 390]) {
+    await call('Emulation.setDeviceMetricsOverride', {
+      width,
+      height: 920,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    assert.ok(
+      await evaluate('document.documentElement.scrollWidth<=innerWidth'),
+      'dashboard fits ' + width,
+    );
+    assert.ok(
+      await evaluate(`[...document.querySelectorAll('.overview-summaries h2,.overview-list li')].every(el=>{
+      const box=el.getBoundingClientRect(), panel=el.closest('.panel').getBoundingClientRect();
+      return box.left-panel.left>=16 && panel.right-box.right>=16;
+    })`),
+      'panel insets at ' + width,
+    );
+    if (process.env.THEME_QA_DIR) {
+      const { mkdir } = await import('node:fs/promises');
+      await mkdir(process.env.THEME_QA_DIR, { recursive: true });
+      await evaluate(
+        "document.querySelector('.overview-summaries').scrollIntoView({block:'center',behavior:'instant'})",
+      );
+      const shot = await call('Page.captureScreenshot', { format: 'jpeg', quality: 82 });
+      await writeFile(
+        join(process.env.THEME_QA_DIR, 'overview-' + width + '.jpg'),
+        Buffer.from(shot.data, 'base64'),
+      );
+    }
+  }
+  await call('Emulation.clearDeviceMetricsOverride');
   assert.equal(await evaluate('!!document.querySelector(\'a[href="/admin/users"]\')'), false);
   await click('document.querySelector(\'a[href="/admin/themes"]\')');
   const previewDoc = "document.querySelector('.proof iframe').contentDocument";

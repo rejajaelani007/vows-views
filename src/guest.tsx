@@ -1047,7 +1047,7 @@ function CameraPage() {
               autoPlay
               playsInline
               muted
-              className={ready && !preview ? 'visible' : ''}
+              className={ready && !preview && filter === 'Original' ? 'visible' : ''}
             />
             <LiveFilter
               video={video}
@@ -1125,7 +1125,6 @@ function CameraPage() {
               enabled={event?.filters ?? names}
               onChange={setFilter}
               disabled={countdown !== null}
-              video={video.current}
             />
           )}
           {cameraError && (

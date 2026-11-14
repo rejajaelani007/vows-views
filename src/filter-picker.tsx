@@ -1,5 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { names, renderFrame, type FilterName } from './camera-filters';
+const samples = import.meta.glob<string>('./assets/filter-samples/*.webp', {
+  eager: true,
+  import: 'default',
+  query: '?url&no-inline',
+});
 export function LiveFilter({
   video,
   ready,
@@ -40,46 +45,14 @@ export function FilterPicker({
   enabled,
   onChange,
   disabled,
-  video,
 }: {
   value: FilterName;
   enabled: string[];
   onChange: (v: FilterName) => void;
   disabled: boolean;
-  video: HTMLVideoElement | null;
 }) {
-  const group = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const sample = document.createElement('canvas');
-    sample.width = 96;
-    sample.height = 64;
-    const ctx = sample.getContext('2d')!;
-    const gradient = ctx.createLinearGradient(0, 0, 96, 64);
-    gradient.addColorStop(0, '#688778');
-    gradient.addColorStop(0.6, '#e4b19f');
-    gradient.addColorStop(1, '#eadbb6');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 96, 64);
-    ctx.fillStyle = '#fff1df';
-    ctx.font = '42px Georgia';
-    ctx.fillText('♥', 30, 48);
-    function draw() {
-      group.current
-        ?.querySelectorAll('canvas')
-        .forEach((c) =>
-          renderFrame(
-            c,
-            video && video.readyState >= 2 ? video : sample,
-            c.dataset.filter as FilterName,
-          ),
-        );
-    }
-    draw();
-    const timer = window.setInterval(draw, 1800);
-    return () => clearInterval(timer);
-  }, [video, enabled]);
   return (
-    <div ref={group} className="filter-strip" aria-label="Pilihan filter kamera">
+    <div className="filter-strip" role="group" aria-label="Pilihan filter kamera">
       {names
         .filter((n) => n === 'Original' || enabled.includes(n))
         .map((n) => (
@@ -90,7 +63,17 @@ export function FilterPicker({
             aria-pressed={value === n}
             onClick={() => onChange(n)}
           >
-            <canvas width={80} height={54} data-filter={n} />
+            <img
+              src={
+                samples[
+                  './assets/filter-samples/' + n.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.webp'
+                ]
+              }
+              width={144}
+              height={96}
+              decoding="async"
+              alt=""
+            />
             <span>{n}</span>
           </button>
         ))}

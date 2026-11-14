@@ -460,26 +460,29 @@ export function ProjectSettings({
                     </div>
                   ))}
                 </div>
-                {!themeEditor && (
-                  <button
-                    type="button"
-                    className="btn btn-outline"
-                    onClick={() => setPreview(true)}
-                  >
-                    Pratinjau halaman
-                  </button>
-                )}
               </>
             )}
             {error && <ErrorBox message={error} />}
-            <button className="btn btn-primary" disabled={busy || (themeEditor && !dirty)}>
-              {busy ? 'Menyimpan…' : themeEditor ? 'Save Changes' : 'Simpan pengaturan'}
-            </button>
-            {themeEditor && (
-              <button type="button" className="btn btn-outline" disabled={!dirty} onClick={cancel}>
-                Cancel
+            <div className="studio-buttons editor-actions">
+              <button className="btn btn-primary" disabled={busy || (themeEditor && !dirty)}>
+                {busy ? 'Menyimpan…' : themeEditor ? 'Save Changes' : 'Simpan pengaturan'}
               </button>
-            )}
+              {themeEditor && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  disabled={!dirty}
+                  onClick={cancel}
+                >
+                  Cancel
+                </button>
+              )}
+              {!themeEditor && !camera && (
+                <button type="button" className="btn btn-outline" onClick={() => setPreview(true)}>
+                  Pratinjau halaman
+                </button>
+              )}
+            </div>
           </fieldset>
         </form>
         {themeEditor && <ThemePreview event={d} />}

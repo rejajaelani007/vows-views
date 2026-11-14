@@ -342,18 +342,19 @@ function AdminLayout({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
           </div>
         </header>
         <main className="admin-content">
-          {['/admin/settings', '/admin/themes', '/admin/filters'].includes(path) && projects.length > 0 && (
-            <label className="project-switch">
-              Project
-              <select value={current?.id} onChange={(e) => select(e.target.value)}>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {p.username}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          {['/admin/settings', '/admin/themes', '/admin/filters'].includes(path) &&
+            projects.length > 0 && (
+              <label className="project-switch">
+                Project
+                <select value={current?.id} onChange={(e) => select(e.target.value)}>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} · {p.username}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           {path === '/admin/projects' ? (
             <Projects auth={auth} projects={projects} reload={reload} />
           ) : path === '/admin/users' && superAdmin ? (
@@ -449,7 +450,7 @@ function Dashboard() {
     };
   }, [load]);
   return (
-    <>
+    <div className="dashboard-overview">
       <PageTitle
         eyebrow="YOUR WEDDING, AT A GLANCE"
         title="Every moment, beautifully captured."
@@ -527,32 +528,48 @@ function Dashboard() {
               </article>
             ))}
           </div>
-          <section className="panel">
-            <div className="panel-title">
-              <h2>Foto per project</h2>
-              <span>
-                {data.projects.length} project
-                {data.users !== undefined && ' · ' + data.users + ' user'}
-              </span>
-            </div>
-            {data.projects.map((p) => (
-              <p key={p.id}>
-                {p.name} · {number(p.total)} foto
-              </p>
-            ))}
-          </section>
-          <section className="panel">
-            <h2>Aktivitas terbaru</h2>
-            {data.recent.length ? (
-              data.recent.map((a) => (
-                <p key={a.id}>
-                  {dateTime(a.created_at)} · {a.name} · {a.label}
-                </p>
-              ))
-            ) : (
-              <p>Belum ada foto yang diambil.</p>
-            )}
-          </section>
+          <div className="overview-summaries">
+            <section className="panel">
+              <div className="panel-title">
+                <h2>Foto per project</h2>
+                <span>
+                  {data.projects.length} project
+                  {data.users !== undefined && ' · ' + data.users + ' user'}
+                </span>
+              </div>
+              {data.projects.length ? (
+                <ul className="overview-list">
+                  {data.projects.map((p) => (
+                    <li key={p.id}>
+                      <span>{p.name}</span>
+                      <strong>{number(p.total)} foto</strong>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="overview-empty">Belum ada project.</p>
+              )}
+            </section>
+            <section className="panel">
+              <div className="panel-title">
+                <h2>Aktivitas terbaru</h2>
+              </div>
+              {data.recent.length ? (
+                <ul className="overview-list">
+                  {data.recent.map((a) => (
+                    <li key={a.id}>
+                      <span>
+                        {a.name} · {a.label}
+                      </span>
+                      <time dateTime={a.created_at}>{dateTime(a.created_at)}</time>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="overview-empty">Belum ada foto yang diambil.</p>
+              )}
+            </section>
+          </div>
           <div className="dashboard-charts">
             <section className="panel chart-panel">
               <div className="panel-title">
@@ -689,7 +706,7 @@ function Dashboard() {
           </div>
         </>
       )}
-    </>
+    </div>
   );
 }
 function ActivityChart({ days }: { days: Overview['days'] }) {

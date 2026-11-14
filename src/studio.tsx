@@ -224,21 +224,26 @@ export function Projects({
                 <td>{p.qr_count}</td>
                 <td>{p.photo_count || 0}</td>
                 <td>
-                  <button
-                    className="text-link"
-                    onClick={() => {
-                      setEditing(p.id);
-                      setName(p.name);
-                      setError('');
-                    }}
-                  >
-                    Edit
-                  </button>{' '}
-                  {p.id !== 'legacy' && !p.qr_count && (
-                    <button className="text-link" onClick={() => remove(p)}>
-                      Hapus
+                  <div className="project-actions">
+                    <button
+                      className="btn btn-small btn-outline"
+                      onClick={() => {
+                        setEditing(p.id);
+                        setName(p.name);
+                        setError('');
+                      }}
+                    >
+                      Edit
                     </button>
-                  )}
+                    {p.id !== 'legacy' && !p.qr_count && (
+                      <button
+                        className="btn btn-small btn-outline danger-icon"
+                        onClick={() => remove(p)}
+                      >
+                        Hapus
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

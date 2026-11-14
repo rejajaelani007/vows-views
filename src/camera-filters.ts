@@ -1,4 +1,4 @@
-import catalog from '../server/filter-presets.json';
+import catalog from '../server/filter-presets.json' with { type: 'json' };
 export type FilterName = string;
 export const names = catalog.map((p) => p.name);
 const presets = Object.fromEntries(catalog.map((p) => [p.name, p]));
