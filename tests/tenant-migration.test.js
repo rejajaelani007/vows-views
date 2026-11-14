@@ -63,7 +63,18 @@ test('pre-project SQLite records retain ownership, URL code, photo history and b
     const old = new DatabaseSync(join(dir, 'wedding.sqlite'));
     try {
       const schema = await readFile(new URL('../server/schema.sql', import.meta.url), 'utf8');
-      old.exec(schema.split('CREATE TABLE IF NOT EXISTS projects')[0]);
+      old.exec(
+        schema
+          .split('CREATE TABLE IF NOT EXISTS projects')[0]
+          .replace(
+            'total_limit INTEGER CHECK(total_limit >= 1)',
+            'total_limit INTEGER NOT NULL CHECK(total_limit BETWEEN 1 AND 1000000)',
+          )
+          .replace(
+            'CHECK(per_session_limit >= 1 AND (total_limit IS NULL OR per_session_limit <= total_limit))',
+            'CHECK(per_session_limit BETWEEN 1 AND total_limit)',
+          ),
+      );
       old.exec(`INSERT INTO admins(id,email,password_hash) VALUES('original','owner@example.org','existing-hash');
        UPDATE settings SET partner_one='Rani',venue='Taman' WHERE id=1;
        INSERT INTO qr_codes(id,code,label,total_limit,per_session_limit,used_count) VALUES('printed','original-printed-code','Undangan',2,2,1);
@@ -101,6 +112,11 @@ test('pre-project SQLite records retain ownership, URL code, photo history and b
         'Rani',
       );
       assert.equal((await db.prepare('SELECT count(*) n FROM projects').get()).n, 1);
+      assert.deepEqual(await db.prepare('PRAGMA foreign_key_check').all(), []);
+      assert.equal(
+        (await db.prepare("SELECT created_by FROM qr_codes WHERE id='printed'").get()).created_by,
+        'original',
+      );
       db.close();
       db = undefined;
     }

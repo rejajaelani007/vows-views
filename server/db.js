@@ -120,7 +120,7 @@ export async function openDatabase(
     await db.prepare('SELECT message FROM photos LIMIT 0').all();
     await db
       .prepare(
-        'SELECT q.project_id, p.filters_json, a.role FROM qr_codes q JOIN projects p ON p.id=q.project_id JOIN admins a ON a.id=p.owner_id LIMIT 0',
+        'SELECT q.project_id,q.created_by,q.deleted_at,p.filters_json,a.photo_quota,b.allocated FROM qr_codes q JOIN projects p ON p.id=q.project_id JOIN admins a ON a.id=p.owner_id JOIN account_quota b ON b.id=a.id LIMIT 0',
       )
       .all();
     return db;
@@ -156,9 +156,10 @@ export async function serializeQr(db, qr, publicUrl) {
   return {
     ...qr,
     active: Boolean(qr.active),
-    remaining: qr.total_limit - qr.used_count,
-    max_sessions: Math.floor(qr.total_limit / qr.per_session_limit),
-    unallocated: qr.total_limit % qr.per_session_limit,
+    remaining: qr.total_limit === null ? null : qr.total_limit - qr.used_count,
+    max_sessions:
+      qr.total_limit === null ? null : Math.floor(qr.total_limit / qr.per_session_limit),
+    unallocated: qr.total_limit === null ? 0 : qr.total_limit % qr.per_session_limit,
     sessions,
     allocated_sessions: allocated,
     url: `${publicUrl}/${qr.username}/${qr.code}`,

@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { api, json, ErrorBox, Spinner, Modal, useToast } from './lib';
+import { api, json, ErrorBox, Spinner, Modal, useToast, number } from './lib';
 import type { Auth, Project, StudioUser } from './types';
 export function Accounts({ auth }: { auth: Auth }) {
   const [users, setUsers] = useState<StudioUser[]>([]),
@@ -33,6 +33,7 @@ export function Accounts({ auth }: { auth: Auth }) {
             email: draft.email,
             username: draft.username,
             active: Boolean(draft.active),
+            ...(draft.role === 'project' ? { photo_quota: draft.photo_quota } : {}),
             ...(password ? { password } : {}),
           },
           auth.csrf,
@@ -53,7 +54,17 @@ export function Accounts({ auth }: { auth: Auth }) {
         <h1>User Management</h1>
         <button
           className="btn btn-primary"
-          onClick={() => edit({ id: '', username: '', email: '', role: 'project', active: 1 })}
+          onClick={() =>
+            edit({
+              id: '',
+              username: '',
+              email: '',
+              role: 'project',
+              active: 1,
+              photo_quota: 0,
+              allocated: 0,
+            })
+          }
         >
           Buat user
         </button>
@@ -66,6 +77,9 @@ export function Accounts({ auth }: { auth: Auth }) {
               <th>Username</th>
               <th>Email</th>
               <th>Peran</th>
+              <th>Kuota akun</th>
+              <th>Teralokasi</th>
+              <th>Tersedia</th>
               <th>Status</th>
               <th />
             </tr>
@@ -76,6 +90,9 @@ export function Accounts({ auth }: { auth: Auth }) {
                 <td>{u.username}</td>
                 <td>{u.email}</td>
                 <td>{u.role === 'super' ? 'Admin Utama' : 'Admin Project'}</td>
+                <td>{u.role === 'super' ? 'Tanpa batas' : number(u.photo_quota)}</td>
+                <td>{u.role === 'super' ? '—' : number(u.allocated)}</td>
+                <td>{u.role === 'super' ? 'Tanpa batas' : number(u.photo_quota - u.allocated)}</td>
                 <td>{u.active ? 'Aktif' : 'Nonaktif'}</td>
                 <td>
                   <button className="btn btn-small btn-outline" onClick={() => edit(u)}>
@@ -122,6 +139,23 @@ export function Accounts({ auth }: { auth: Auth }) {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </label>
+            {draft.role === 'project' && (
+              <label>
+                Kuota foto akun
+                <input
+                  type="number"
+                  min={draft.allocated}
+                  step="1"
+                  required
+                  value={draft.photo_quota}
+                  onChange={(e) => setDraft({ ...draft, photo_quota: Number(e.target.value) })}
+                />
+                <small>
+                  Sudah dialokasikan {number(draft.allocated)} foto. Kuota berlaku untuk semua
+                  project akun ini.
+                </small>
+              </label>
+            )}
             <label className="checkbox-label">
               <input
                 type="checkbox"

@@ -52,7 +52,53 @@ export async function tenantScenarios({
   );
   await own('put', '/projects/legacy').send({ name: 'Other' }).expect(404);
   await own('post', '/qrs').send({ project_id: 'legacy', label: 'No' }).expect(404);
-  await own('post', '/qrs').send({ project_id: pr, label: 'No', total_limit: 5 }).expect(403);
+  const balance = async () => {
+    const { total, allocated, available } = (await studio.get('/api/admin/quota').expect(200)).body;
+    return { total, allocated, available };
+  };
+  const grant = (photo_quota) =>
+    root('put', '/users/' + created.body.id).send({
+      username: account.username,
+      email: account.email,
+      active: true,
+      photo_quota,
+    });
+  const make = (project_id, total_limit, per_session_limit = 2) =>
+    own('post', '/qrs').send({
+      project_id,
+      total_limit,
+      per_session_limit,
+      label: 'Alokasi studio',
+    });
+  await make(pr, 5).expect(409);
+  await make(pr, null).expect(403);
+  await own('put', '/users/' + created.body.id)
+    .send({ ...account, photo_quota: 9999 })
+    .expect(403);
+  await grant(500).expect(200);
+  const first = (await make(pr, 100).expect(201)).body;
+  const middle = (await make(second, 150).expect(201)).body;
+  const last = (await make(pr, 200).expect(201)).body;
+  assert.deepEqual(await balance(), { total: 500, allocated: 450, available: 50 });
+  await grant(449).expect(409);
+  await make(second, 51).expect(409);
+  const race = await Promise.all([make(pr, 50), make(second, 50)]);
+  assert.deepEqual(race.map((r) => r.status).sort(), [201, 409]);
+  const winner = race.find((r) => r.status === 201).body;
+  assert.equal(winner.max_sessions, 25);
+  await own('put', '/qrs/' + first.id)
+    .send({ total_limit: 101 })
+    .expect(409);
+  await root('put', '/qrs/' + first.id)
+    .send({ total_limit: 101 })
+    .expect(409);
+  await own('put', '/qrs/' + first.id)
+    .send({ total_limit: 50 })
+    .expect(200);
+  await grant(450).expect(200);
+  for (const q of [first, middle, last, winner]) await own('delete', '/qrs/' + q.id).expect(200);
+  assert.deepEqual(await balance(), { total: 450, allocated: 0, available: 450 });
+  await grant(2).expect(200);
   await root('put', '/system').send({ default_total: 2, default_per: 2 }).expect(200);
   const qr = (
     await own('post', '/qrs')
@@ -69,6 +115,11 @@ export async function tenantScenarios({
       .send({ project_id: second, label: 'Resepsi', total_limit: 1, per_session_limit: 1 })
       .expect(201)
   ).body;
+  assert.deepEqual(await balance(), { total: 2, allocated: 2, available: 0 });
+  await own('put', '/qrs/' + secondQr.id)
+    .send({ total_limit: 5000 })
+    .expect(403);
+  await own('delete', '/qrs/' + secondQr.id).expect(403);
   const base = '/api/invites/studio-foto/' + qr.code;
   assert.equal(qr.url, origin + '/studio-foto/wedding-dimas-putri');
   assert.equal(qr.total_limit, 2);
@@ -76,10 +127,10 @@ export async function tenantScenarios({
     .send({ project_id: second, label: 'Duplikat', code: qr.code })
     .expect(409);
   await own('put', '/qrs/' + qr.id)
-    .send({ label: 'No', per_session_limit: 1 })
-    .expect(403);
+    .send({ label: 'Tamu VIP', per_session_limit: 1 })
+    .expect(200);
   await own('put', '/qrs/' + qr.id)
-    .send({ label: 'Tamu VIP', active: true })
+    .send({ label: 'Tamu VIP', per_session_limit: 2, active: true })
     .expect(200);
   assert.equal((await studio.get('/api/admin/qrs')).body.length, 2);
   for (const route of [
@@ -206,6 +257,31 @@ export async function tenantScenarios({
     .get(base + '/photos')
     .expect(403);
   await request(app).get(saved.photo.url).expect(403);
+  await grant(10).expect(200);
+  const refund = (await make(second, 8).expect(201)).body;
+  const refundGuest = await startGuest(refund);
+  const photoToDelete = (await upload(refund, refundGuest)).body.photo;
+  await own('delete', '/photos/' + photoToDelete.id).expect(200);
+  assert.equal((await balance()).available, 0);
+  await own('delete', '/qrs/' + refund.id).expect(200);
+  assert.deepEqual(await balance(), { total: 10, allocated: 3, available: 7 });
+  assert.equal(
+    (await studio.get('/api/admin/qrs')).body.some((q) => q.id === refund.id),
+    false,
+  );
+  assert.ok(
+    (await admin.get('/api/admin/qrs?include_archived=1')).body.find((q) => q.id === refund.id)
+      .deleted_at,
+  );
+  assert.equal(
+    (await studio.get('/api/admin/qrs/' + refund.id + '/usage').expect(200)).body.qr.used_count,
+    1,
+  );
+  await own('delete', '/qrs/' + refund.id).expect(404);
+  await request(app)
+    .get('/api/qr/' + refund.code)
+    .expect(404);
+  await grant(2).expect(409);
   await root('put', '/users/' + created.body.id)
     .send({ ...account, active: false })
     .expect(200);

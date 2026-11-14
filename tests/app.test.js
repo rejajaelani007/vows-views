@@ -279,6 +279,19 @@ test('QR CRUD validates limits, generates unique camera URL and real PNG', async
     200,
   );
 });
+test('unlimited admin QR admits more guests while enforcing the per-session limit', async () => {
+  const qr = await createQr(null, 1);
+  assert.equal(qr.max_sessions, null);
+  assert.equal(qr.remaining, null);
+  const first = await startGuest(qr);
+  assert.equal(first.session.remaining, 1);
+  await upload(qr, first).then((r) => assert.equal(r.status, 201));
+  assert.equal((await upload(qr, first)).status, 409);
+  const next = await startGuest(qr);
+  assert.equal((await upload(qr, next)).status, 201);
+  assert.equal((await admin.get('/api/admin/overview')).body.unlimited_qrs, 1);
+});
+
 test('unknown and disabled QR cannot create guest sessions', async () => {
   assert.equal(
     (await request(app).post('/api/guest/missing/session').set('Origin', origin)).status,
@@ -407,14 +420,9 @@ test('guest session ownership, CSRF, expiry and disabled QR are revalidated on u
   assert.equal((await upload(qr, guest)).status, 401);
   assert.equal(await counter(qr), 0);
 });
-test('QR history cannot be deleted, session size cannot change, total cannot undercut allocated slots', async () => {
+test('session size is locked, total covers allocated slots, retiring a QR preserves history', async () => {
   const qr = await createQr();
   await startGuest(qr);
-  assert.equal(
-    (await admin.delete(`/api/admin/qrs/${qr.id}`).set('Origin', origin).set('X-CSRF-Token', csrf))
-      .status,
-    409,
-  );
   const change = (body) =>
     admin.put(`/api/admin/qrs/${qr.id}`).set('Origin', origin).set('X-CSRF-Token', csrf).send(body);
   assert.equal(
@@ -429,6 +437,16 @@ test('QR history cannot be deleted, session size cannot change, total cannot und
     (await change({ label: 'Updated', total_limit: 12, per_session_limit: 3, active: false }))
       .status,
     200,
+  );
+  await admin
+    .delete(`/api/admin/qrs/${qr.id}`)
+    .set('Origin', origin)
+    .set('X-CSRF-Token', csrf)
+    .expect(200);
+  await change({ active: true }).expect(404);
+  assert.equal(
+    (await db.prepare('SELECT count(*) n FROM guest_sessions WHERE qr_id=?').get(qr.id)).n,
+    1,
   );
 });
 test('photo deletion hides media and gallery but preserves usage and uploaded totals', async () => {
@@ -508,5 +526,5 @@ test('invalid dates and reversed date ranges return validation errors', async ()
 
 test('studio accounts, dashboards, dynamic galleries, assets, quotas and filters stay scoped to their projects', async () => {
   const { tenantScenarios } = await import('./tenant-scenarios.js');
-  await tenantScenarios({admin,csrf,app,origin,password,image,startGuest,upload});
+  await tenantScenarios({ admin, csrf, app, origin, password, image, startGuest, upload });
 });

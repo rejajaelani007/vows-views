@@ -40,8 +40,9 @@ kedua nilai setelah provisioning. Mengubahnya tidak mengganti password akun lama
    **Camera Filter Settings** mengatur pilihan filter untuk project tersebut.
 2. Pada **QR codes**, pilih project, label, dan kode URL. Tautan berbentuk
    `/nama-user/kode-qr`. Kode akses bersifat unik di seluruh aplikasi agar dapat
-   dimasukkan tanpa username. Admin Utama menentukan kuota total dan per sesi.
-   QR buatan studio memakai kuota bawaan dari **System Settings** (awal 1/1). Unduh PNG 1200px
+   dimasukkan tanpa username. Admin Utama memberikan kuota akun melalui **User Management**.
+   Studio memilih sendiri alokasi QR dan batas per sesi, dengan nilai awal dari **System Settings**.
+   QR yang dibuat Admin Utama menggunakan alokasi Admin sendiri dan bisa memakai **Tanpa batas total foto**. Unduh PNG 1200px
    atau buka **Cetak** untuk kartu QR. URL berasal dari `PUBLIC_URL` server.
 3. Tamu memindai QR dan menekan **Aktifkan kamera**. Sesi server mendapat token
    cookie HttpOnly unik. Kamera depan menjadi pilihan awal. Tersedia ganti kamera,
@@ -74,7 +75,8 @@ Chrome atau Edge melalui `CHROMIUM_BIN`.
   identitas manusia. Beri QR berbeda bila perlu batas untuk undangan tertentu.
 - Kuota per sesi tidak dapat diubah setelah memiliki riwayat sesi. Kuota total
   dapat ditambah, atau dikurangi selama tetap menampung semua slot teralokasi.
-- QR yang mempunyai riwayat sesi tidak dapat dihapus. Gunakan nonaktifkan.
+- Saldo akun mencakup semua project. Total 500 dengan alokasi 100, 150, dan 200 menyisakan 50 foto untuk QR lain. Menonaktifkan QR tetap mencadangkan alokasinya. Menghapus QR menutup sesi dan melepas alokasi yang belum digunakan. Pemakaian dan riwayat foto tetap tersimpan.
+- Akun baru mulai dengan kuota 0 sampai Admin memberikan kuota. Untuk database lama, jalankan `npm run db:init` sebelum memperbarui deployment Turso. QR lama mengikuti pemilik project karena versi sebelumnya tidak mencatat pembuat. Kuota awal akun lama mencakup seluruh alokasi yang sudah ada.
 - Semua counter dan validasi dilakukan dalam transaksi tulis (`BEGIN IMMEDIATE`
   lokal atau `write` libSQL). Dua
   request bersamaan tidak dapat melewati limit. File dibersihkan saat rollback;

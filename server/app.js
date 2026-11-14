@@ -6,6 +6,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import {
   checkOwner,
+  accountQuota,
   isSuper,
   onlySuper,
   projectFor,
@@ -39,11 +40,11 @@ import {
 const qrInput = z
   .object({
     label: z.string().trim().min(1).max(100),
-    total_limit: z.number().int().min(1).max(1000000),
-    per_session_limit: z.number().int().min(1).max(1000000),
+    total_limit: z.number().int().min(1).nullable(),
+    per_session_limit: z.number().int().min(1),
     active: z.boolean().default(true),
   })
-  .refine((v) => v.per_session_limit <= v.total_limit, {
+  .refine((v) => v.total_limit === null || v.per_session_limit <= v.total_limit, {
     message: 'Kuota per sesi tidak boleh melebihi kuota total.',
   });
 const loginInput = z
@@ -181,7 +182,7 @@ export async function createApp({
   const qrById = async (qrId) => await db.prepare(`${qrSelect} WHERE q.id=?`).get(qrId);
   const requireQr = async (code) => {
     const qr = await qrByCode(code);
-    if (!qr)
+    if (!qr || qr.deleted_at)
       fail(404, 'QR Code tidak ditemukan. Pastikan tautan yang dipindai benar.', 'QR_NOT_FOUND');
     return qr;
   };
@@ -225,7 +226,10 @@ export async function createApp({
     csrf: session.csrf,
     photo_count: session.photo_count,
     photo_limit: session.photo_limit,
-    remaining: Math.min(session.photo_limit - session.photo_count, qr.total_limit - qr.used_count),
+    remaining: Math.min(
+      session.photo_limit - session.photo_count,
+      qr.total_limit === null ? Infinity : qr.total_limit - qr.used_count,
+    ),
     expires_at: session.expires_at,
     label: qr.label,
   });
@@ -331,7 +335,7 @@ export async function createApp({
       path: `/${qr.username}/${qr.code}`,
       session: session ? sessionResult(session, qr) : null,
       label: qr.label,
-      remaining: qr.total_limit - qr.used_count,
+      remaining: qr.total_limit === null ? null : qr.total_limit - qr.used_count,
       per_session_limit: qr.per_session_limit,
     });
   });
@@ -347,9 +351,12 @@ export async function createApp({
           .prepare('SELECT * FROM guest_sessions WHERE token_hash=? AND qr_id=? AND expires_at>?')
           .get(hashToken(existing), qr.id, new Date().toISOString()));
       if (session) return { session, qr };
-      if (qr.used_count >= qr.total_limit)
+      if (qr.total_limit !== null && qr.used_count >= qr.total_limit)
         fail(409, 'Kuota foto untuk QR Code ini telah habis.', 'QUOTA_EXHAUSTED');
-      if ((await allocatedSessions(db, qr.id)) >= Math.floor(qr.total_limit / qr.per_session_limit))
+      if (
+        qr.total_limit !== null &&
+        (await allocatedSessions(db, qr.id)) >= Math.floor(qr.total_limit / qr.per_session_limit)
+      )
         fail(409, 'Seluruh slot sesi untuk QR Code ini sudah teralokasi.', 'SESSIONS_EXHAUSTED');
       const raw = token(),
         sid = id(),
@@ -490,7 +497,7 @@ export async function createApp({
             latestSession.photo_count >= latestSession.photo_limit
           )
             fail(409, 'Kuota foto untuk sesi Anda telah habis.', 'SESSION_QUOTA_EXHAUSTED');
-          if (latestQr.used_count >= latestQr.total_limit)
+          if (latestQr.total_limit !== null && latestQr.used_count >= latestQr.total_limit)
             fail(409, 'Kuota foto QR Code telah mencapai batas.', 'QUOTA_EXHAUSTED');
           await db
             .prepare(
@@ -638,17 +645,36 @@ export async function createApp({
   managementRoutes(app, db, eventInput);
   app.get(mediaRoutes('/api/admin/media'), (req, res) => mediaResponse(req, res, null, req.admin));
   app.get('/api/admin/overview', async (req, res) => res.json(await overview(db, req.admin)));
+  app.get('/api/admin/quota', async (req, res) => {
+    const defaults = await db
+      .prepare('SELECT default_total,default_per FROM settings WHERE id=1')
+      .get();
+    res.json({ ...(await accountQuota(db, req.admin.admin_id)), ...defaults });
+  });
   app.get('/api/admin/qrs', async (req, res) => {
     await expireSessions(db);
     const rows = await db
-      .prepare(`${qrSelect} WHERE ? OR p.owner_id=? ORDER BY q.created_at DESC`)
-      .all(Number(isSuper(req.admin)), req.admin.admin_id);
+      .prepare(
+        `${qrSelect} WHERE (q.deleted_at IS NULL OR ?) AND (? OR p.owner_id=?)
+         ORDER BY (q.deleted_at IS NOT NULL),q.created_at DESC`,
+      )
+      .all(
+        Number(req.query.include_archived === '1'),
+        Number(isSuper(req.admin)),
+        req.admin.admin_id,
+      );
     res.json(await Promise.all(rows.map((q) => serializeQr(db, q, publicUrl))));
   });
-  function qrValues(req, defaults) {
-    if (!isSuper(req.admin) && ('total_limit' in req.body || 'per_session_limit' in req.body))
-      fail(403, 'Kuota hanya dapat diatur oleh Admin Utama.');
-    return qrInput.parse({ ...defaults, ...req.body });
+  async function validateAllocation(creatorId, total, previous = 0) {
+    const balance = await accountQuota(db, creatorId);
+    if (balance.total === null) return;
+    if (total === null) fail(403, 'QR tanpa batas hanya tersedia untuk QR milik Admin Utama.');
+    if (total - previous > balance.available)
+      fail(
+        409,
+        `Kuota foto tidak mencukupi. Maksimal alokasi untuk QR ini ${balance.available + previous} foto.`,
+        'ACCOUNT_QUOTA_EXCEEDED',
+      );
   }
   app.post('/api/admin/qrs', async (req, res) => {
     const qr = await db.transaction(async () => {
@@ -658,17 +684,27 @@ export async function createApp({
           'SELECT default_total AS total_limit,default_per AS per_session_limit FROM settings WHERE id=1',
         )
         .get();
-      const v = qrValues(req, defaults),
+      const v = qrInput.parse({ ...defaults, ...req.body }),
         qrId = id();
+      await validateAllocation(req.admin.admin_id, v.total_limit);
       const code = req.body.code
         ? slug.parse(req.body.code)
         : randomBytes(24).toString('base64url');
       if (await qrByCode(code)) fail(409, 'Kode QR sudah digunakan. Pilih kode lain.');
       await db
         .prepare(
-          'INSERT INTO qr_codes(id,project_id,label,code,total_limit,per_session_limit,active) VALUES(?,?,?,?,?,?,?)',
+          'INSERT INTO qr_codes(id,project_id,label,code,total_limit,per_session_limit,active,created_by) VALUES(?,?,?,?,?,?,?,?)',
         )
-        .run(qrId, pr.id, v.label, code, v.total_limit, v.per_session_limit, Number(v.active));
+        .run(
+          qrId,
+          pr.id,
+          v.label,
+          code,
+          v.total_limit,
+          v.per_session_limit,
+          Number(v.active),
+          req.admin.admin_id,
+        );
       return serializeQr(db, await qrById(qrId), publicUrl);
     });
     // Preserve the response URL for integrations predating project selection.
@@ -676,7 +712,11 @@ export async function createApp({
     res.status(201).json(qr);
   });
   app.use('/api/admin/qrs/:id', async (req, _, next) => {
-    checkOwner(req.admin, await qrById(req.params.id));
+    const qr = checkOwner(req.admin, await qrById(req.params.id));
+    if (qr.deleted_at && !(req.method === 'GET' && req.path === '/usage'))
+      fail(404, 'QR Code tidak ditemukan.');
+    if (req.method !== 'GET' && !isSuper(req.admin) && qr.created_by !== req.admin.admin_id)
+      fail(403, 'Hanya pembuat QR atau Admin Utama yang dapat mengubah QR ini.');
     next();
   });
   app.put('/api/admin/qrs/:id', async (req, res) => {
@@ -684,7 +724,9 @@ export async function createApp({
       await expireSessions(db);
       const old = await qrById(req.params.id);
       checkOwner(req.admin, old);
-      const input = qrValues(req, { ...old, active: Boolean(old.active) });
+      if (old.deleted_at) fail(404, 'QR Code tidak ditemukan.');
+      const input = qrInput.parse({ ...old, active: Boolean(old.active), ...req.body });
+      await validateAllocation(old.created_by, input.total_limit, old.total_limit);
       const hasHistory = await db
         .prepare('SELECT id FROM guest_sessions WHERE qr_id=? LIMIT 1')
         .get(old.id);
@@ -694,8 +736,9 @@ export async function createApp({
           'Kuota per sesi tidak dapat diubah setelah QR memiliki riwayat sesi. Buat QR baru.',
         );
       if (
+        input.total_limit !== null &&
         input.total_limit <
-        Math.max(old.used_count, (await allocatedSessions(db, old.id)) * input.per_session_limit)
+          Math.max(old.used_count, (await allocatedSessions(db, old.id)) * input.per_session_limit)
       )
         fail(409, 'Kuota total harus tetap menampung foto dan slot sesi yang sudah dialokasikan.');
       await db
@@ -716,12 +759,15 @@ export async function createApp({
   });
   app.delete('/api/admin/qrs/:id', async (req, res) => {
     await transaction(db, async () => {
-      if (!(await qrById(req.params.id))) fail(404, 'QR Code tidak ditemukan.');
+      const old = checkOwner(req.admin, await qrById(req.params.id));
+      if (old.deleted_at) fail(404, 'QR Code tidak ditemukan.');
       if (
         await db.prepare('SELECT id FROM guest_sessions WHERE qr_id=? LIMIT 1').get(req.params.id)
       )
-        fail(409, 'QR Code memiliki riwayat penggunaan. Nonaktifkan untuk menyimpan riwayat.');
-      await db.prepare('DELETE FROM qr_codes WHERE id=?').run(req.params.id);
+        await db
+          .prepare('UPDATE qr_codes SET active=0,deleted_at=?,updated_at=? WHERE id=?')
+          .run(new Date().toISOString(), new Date().toISOString(), old.id);
+      else await db.prepare('DELETE FROM qr_codes WHERE id=?').run(old.id);
     });
     res.json({ ok: true });
   });

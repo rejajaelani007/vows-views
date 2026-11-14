@@ -32,6 +32,8 @@ export interface Project {
   photo_count: number | null;
 }
 export interface StudioUser {
+  photo_quota: number;
+  allocated: number;
   id: string;
   email: string;
   username: string;
@@ -39,18 +41,21 @@ export interface StudioUser {
   active: number;
 }
 export interface Qr {
+  deleted_at: string | null;
+  creator_role: 'super' | 'project';
+  creator_name: string;
   project_id: string;
   project_name: string;
   username: string;
   id: string;
   label: string;
   code: string;
-  total_limit: number;
+  total_limit: number | null;
   per_session_limit: number;
   used_count: number;
   active: boolean;
-  remaining: number;
-  max_sessions: number;
+  remaining: number | null;
+  max_sessions: number | null;
   sessions: number;
   allocated_sessions: number;
   unallocated: number;
@@ -96,6 +101,8 @@ export interface Auth {
   setup_required?: boolean;
 }
 export interface Overview {
+  account_quota: AccountQuota;
+  unlimited_qrs: number;
   projects: { id: string; name: string; total: number }[];
   users?: number;
   recent: { id: string; name: string; label: string; created_at: string }[];
@@ -108,6 +115,11 @@ export interface Overview {
   remaining_quota: number;
   sessions: number;
   days: { day: string; count: number }[];
+}
+export interface AccountQuota {
+  total: number | null;
+  allocated: number;
+  available: number | null;
 }
 export interface Usage {
   qr: Qr;

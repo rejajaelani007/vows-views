@@ -47,6 +47,7 @@ const username = slug.refine(
 const projectName = z.string().trim().min(1).max(100);
 const password = z.string().min(12).max(128);
 const account = z.object({
+  photo_quota: z.number().int().nonnegative().optional(),
   username,
   email: z.email().max(254),
   active: z.boolean().default(true),
@@ -56,7 +57,9 @@ export function onlySuper(req, res, next) {
   if (!isSuper(req.admin)) fail(403, 'Hanya Admin Utama yang dapat melakukan tindakan ini.');
   next();
 }
-export const qrSelect = `SELECT q.*,p.owner_id,p.name AS project_name,a.username,a.active AS owner_active
+export const qrSelect = `SELECT q.*,p.owner_id,p.name AS project_name,a.username,a.active AS owner_active,
+  (SELECT username FROM admins WHERE id=q.created_by) AS creator_name,
+  (SELECT role FROM admins WHERE id=q.created_by) AS creator_role
   FROM qr_codes q JOIN projects p ON p.id=q.project_id JOIN admins a ON a.id=p.owner_id`;
 export function checkOwner(admin, row) {
   if (!row || (!isSuper(admin) && row.owner_id !== admin.admin_id))
@@ -65,6 +68,15 @@ export function checkOwner(admin, row) {
 }
 export async function projectFor(db, admin, projectId) {
   return checkOwner(admin, await db.prepare('SELECT * FROM projects WHERE id=?').get(projectId));
+}
+export async function accountQuota(db, id) {
+  const row = await db.prepare('SELECT * FROM account_quota WHERE id=?').get(id);
+  const total = row.role === 'super' ? null : row.photo_quota;
+  return {
+    total,
+    allocated: row.allocated,
+    available: total === null ? null : total - row.allocated,
+  };
 }
 export async function readEvent(db, projectId, base) {
   const project = await db.prepare('SELECT * FROM projects WHERE id=?').get(projectId);
@@ -113,7 +125,11 @@ export function managementRoutes(app, db, eventInput) {
   app.use(users, onlySuper);
   app.get(users, async (_, res) =>
     res.json(
-      await db.prepare('SELECT id,email,username,role,active FROM admins ORDER BY username').all(),
+      await db
+        .prepare(
+          'SELECT a.id,a.email,a.username,a.role,a.active,a.photo_quota,b.allocated FROM admins a JOIN account_quota b ON b.id=a.id ORDER BY a.username',
+        )
+        .all(),
     ),
   );
   async function unique(account, except = '') {
@@ -132,9 +148,9 @@ export function managementRoutes(app, db, eventInput) {
       await unique(v);
       await db
         .prepare(
-          "INSERT INTO admins(id,username,email,password_hash,role,active) VALUES(?,?,?,?,'project',?)",
+          "INSERT INTO admins(id,username,email,password_hash,role,active,photo_quota) VALUES(?,?,?,?,'project',?,?)",
         )
-        .run(userId, v.username, v.email, hash, Number(v.active));
+        .run(userId, v.username, v.email, hash, Number(v.active), v.photo_quota ?? 0);
     });
     res.status(201).json({ id: userId });
   });
@@ -147,9 +163,28 @@ export function managementRoutes(app, db, eventInput) {
       if (!v.active && original.id === req.admin.admin_id)
         fail(409, 'Akun yang sedang Anda gunakan harus tetap aktif.');
       await unique(v, original.id);
+      if (
+        v.photo_quota !== undefined &&
+        original.role === 'project' &&
+        v.photo_quota < (await accountQuota(db, original.id)).allocated
+      )
+        fail(
+          409,
+          'Kuota akun tidak boleh kurang dari alokasi QR dan foto yang sudah digunakan.',
+          'QUOTA_BELOW_ALLOCATION',
+        );
       await db
-        .prepare('UPDATE admins SET username=?,email=?,password_hash=?,active=? WHERE id=?')
-        .run(v.username, v.email, hash || original.password_hash, Number(v.active), original.id);
+        .prepare(
+          'UPDATE admins SET username=?,email=?,password_hash=?,active=?,photo_quota=? WHERE id=?',
+        )
+        .run(
+          v.username,
+          v.email,
+          hash || original.password_hash,
+          Number(v.active),
+          v.photo_quota ?? original.photo_quota,
+          original.id,
+        );
       if (hash || !v.active)
         await db.prepare('DELETE FROM admin_sessions WHERE admin_id=?').run(original.id);
     });
@@ -175,7 +210,7 @@ export function managementRoutes(app, db, eventInput) {
       await db
         .prepare(
           `SELECT p.id,p.name,p.owner_id,a.username,
-      (SELECT COUNT(*) FROM qr_codes WHERE project_id=p.id) qr_count,
+      (SELECT COUNT(*) FROM qr_codes WHERE project_id=p.id AND deleted_at IS NULL) qr_count,
       (SELECT SUM(used_count) FROM qr_codes WHERE project_id=p.id) photo_count,
       (SELECT q.code FROM qr_codes q WHERE q.project_id=p.id AND q.active=1 AND a.active=1 ORDER BY q.created_at LIMIT 1) code
       FROM projects p JOIN admins a ON a.id=p.owner_id WHERE ? OR p.owner_id=? ORDER BY p.name,p.id`,
@@ -318,7 +353,10 @@ export async function overview(db, admin) {
   const scopedQr = `SELECT id FROM qr_codes WHERE project_id IN (${visible})`;
   const qr = await db
     .prepare(
-      `SELECT COUNT(*) total_qr, COALESCE(SUM(active),0) active_qr,COALESCE(SUM(total_limit),0) total_quota,COALESCE(SUM(used_count),0) used_quota FROM qr_codes WHERE project_id IN (${visible})`,
+      `SELECT COUNT(CASE WHEN deleted_at IS NULL THEN 1 END) total_qr, COALESCE(SUM(active),0) active_qr,
+      COUNT(CASE WHEN total_limit IS NULL AND deleted_at IS NULL THEN 1 END) unlimited_qrs,
+      COALESCE(SUM(CASE WHEN deleted_at IS NOT NULL OR total_limit IS NULL THEN used_count ELSE total_limit END),0) total_quota,
+      COALESCE(SUM(used_count),0) used_quota FROM qr_codes WHERE project_id IN (${visible})`,
     )
     .get(...args);
   const photo = await db
@@ -349,6 +387,7 @@ export async function overview(db, admin) {
     : undefined;
   return {
     ...qr,
+    account_quota: await accountQuota(db, admin.admin_id),
     ...photo,
     sessions,
     days,

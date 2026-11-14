@@ -54,7 +54,17 @@ import {
   weddingDate,
 } from './lib';
 import { Pagination, PhotoGrid, PhotoViewer } from './guest';
-import type { Auth, Overview, Photo, PhotoList, Qr, Usage, Project, WeddingEvent } from './types';
+import type {
+  AccountQuota,
+  Auth,
+  Overview,
+  Photo,
+  PhotoList,
+  Qr,
+  Usage,
+  Project,
+  WeddingEvent,
+} from './types';
 
 export function AdminApp() {
   const [auth, setAuth] = useState<Auth | null>(null),
@@ -504,7 +514,7 @@ function Dashboard() {
               {
                 icon: ImageIcon,
                 label: 'Total kuota foto',
-                value: data.total_quota,
+                value: data.unlimited_qrs ? null : data.total_quota,
                 note: `${number(data.used_quota)} foto telah diambil`,
                 color: 'sage',
               },
@@ -523,11 +533,12 @@ function Dashboard() {
                     <s.icon size={20} strokeWidth={1.5} />
                   </div>
                 </div>
-                <strong>{number(s.value)}</strong>
+                <strong>{formatLimit(s.value)}</strong>
                 <p>{s.note}</p>
               </article>
             ))}
           </div>
+          <Balance balance={data.account_quota} />
           <div className="overview-summaries">
             <section className="panel">
               <div className="panel-title">
@@ -601,16 +612,19 @@ function Dashboard() {
               >
                 <div>
                   <strong>
-                    {data.total_quota
-                      ? Math.round((data.remaining_quota / data.total_quota) * 100)
-                      : 0}
-                    <small>%</small>
+                    {data.unlimited_qrs
+                      ? '∞'
+                      : data.total_quota
+                        ? Math.round((data.remaining_quota / data.total_quota) * 100)
+                        : 0}
+                    {!data.unlimited_qrs && <small>%</small>}
                   </strong>
                   <span>kuota tersedia</span>
                 </div>
               </div>
               <h3>
-                {number(data.remaining_quota)} <span>foto tersisa</span>
+                {formatLimit(data.unlimited_qrs ? null : data.remaining_quota)}{' '}
+                <span>foto tersisa</span>
               </h3>
               <div className="quota-key">
                 <span>
@@ -619,7 +633,7 @@ function Dashboard() {
                 </span>
                 <span>
                   <i />
-                  {number(data.total_quota)} total
+                  {formatLimit(data.unlimited_qrs ? null : data.total_quota)} total
                 </span>
               </div>
             </section>
@@ -787,7 +801,35 @@ function Status({ active }: { active: boolean }) {
     </span>
   );
 }
+const formatLimit = (v: number | null) => (v === null ? 'Tanpa batas' : number(v));
+function Balance({ balance }: { balance: AccountQuota }) {
+  if (balance.total === null)
+    return (
+      <div className="summary-strip">
+        <span>
+          Kuota akun Admin Utama <strong>Tanpa batas</strong>
+        </span>
+      </div>
+    );
+  return (
+    <div className="summary-strip" aria-label="Saldo kuota akun">
+      <span>
+        Kuota akun <strong>{number(balance.total)}</strong>
+      </span>
+      <span>
+        Teralokasi <strong>{number(balance.allocated)}</strong>
+      </span>
+      <span>
+        Tersedia untuk QR <strong>{number(balance.available ?? 0)}</strong>
+      </span>
+    </div>
+  );
+}
 function QuotaBar({ qr }: { qr: Qr }) {
+  if (qr.total_limit === null)
+    return (
+      <div className="quota-bar-wrap">{number(qr.used_count)} foto digunakan · Tanpa batas</div>
+    );
   const pct = (qr.used_count / qr.total_limit) * 100;
   return (
     <div className="quota-bar-wrap">
@@ -822,20 +864,27 @@ function SmallEmpty({
   );
 }
 
-function useQrs() {
+function useQrs(includeArchived = false) {
   const [qrs, setQrs] = useState<Qr[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState('');
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      setQrs(await api<Qr[]>('/admin/qrs', { signal }));
-      setError('');
-    } catch (e) {
-      if ((e as Error).name !== 'AbortError') setError((e as Error).message);
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        setQrs(
+          await api<Qr[]>(includeArchived ? '/admin/qrs?include_archived=1' : '/admin/qrs', {
+            signal,
+          }),
+        );
+        setError('');
+      } catch (e) {
+        if ((e as Error).name !== 'AbortError') setError((e as Error).message);
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+      }
+    },
+    [includeArchived],
+  );
   useEffect(() => {
     const c = new AbortController();
     void load(c.signal);
@@ -851,6 +900,27 @@ function QrManagement({ csrf }: { csrf: string }) {
     [busy, setBusy] = useState(''),
     toast = useToast();
   const { superAdmin, projects, reload } = useContext(WorkspaceContext);
+  const [balance, setBalance] = useState<QrBudget | null>(null),
+    [balanceError, setBalanceError] = useState('');
+  const refreshBalance = useCallback(async () => {
+    try {
+      setBalance(await api<QrBudget>('/admin/quota'));
+      setBalanceError('');
+    } catch (e) {
+      setBalanceError((e as Error).message);
+    }
+  }, []);
+  useEffect(() => {
+    void refreshBalance();
+    window.addEventListener('focus', refreshBalance);
+    return () => window.removeEventListener('focus', refreshBalance);
+  }, [refreshBalance]);
+  const refresh = () =>
+    Promise.all([load(), refreshBalance(), reload()]).catch((e) => toast(e.message, true));
+  const canCreate =
+    projects.length > 0 &&
+    balance !== null &&
+    (balance.available === null || balance.available > 0);
   const filtered = qrs.filter((q) =>
     `${q.label} ${q.code} ${q.project_name} ${q.username}`
       .toLowerCase()
@@ -864,10 +934,6 @@ function QrManagement({ csrf }: { csrf: string }) {
         json(
           'PUT',
           {
-            label: q.label,
-            ...(superAdmin
-              ? { total_limit: q.total_limit, per_session_limit: q.per_session_limit }
-              : {}),
             active: !q.active,
           },
           csrf,
@@ -883,14 +949,16 @@ function QrManagement({ csrf }: { csrf: string }) {
   }
   async function remove(q: Qr) {
     if (
-      !confirm(`Hapus QR Code “${q.label}”? Hanya QR tanpa riwayat penggunaan yang dapat dihapus.`)
+      !confirm(
+        `Hapus QR Code “${q.label}”? Sesi pada QR ini akan ditutup. Sisa alokasi dilepas, foto yang sudah digunakan tetap dihitung.`,
+      )
     )
       return;
     setBusy(q.id);
     try {
       await api(`/admin/qrs/${q.id}`, json('DELETE', undefined, csrf));
       toast('QR Code dihapus.');
-      await load();
+      await refresh();
     } catch (e) {
       toast((e as Error).message, true);
     } finally {
@@ -904,11 +972,7 @@ function QrManagement({ csrf }: { csrf: string }) {
         title="QR code management"
         description="Buat akses photo booth dan atur kuota untuk setiap undangan."
       >
-        <button
-          className="btn btn-primary"
-          disabled={!projects.length}
-          onClick={() => setEditor('new')}
-        >
+        <button className="btn btn-primary" disabled={!canCreate} onClick={() => setEditor('new')}>
           <Plus size={17} /> Buat QR code
         </button>
       </PageTitle>
@@ -916,6 +980,14 @@ function QrManagement({ csrf }: { csrf: string }) {
         <Link to="/admin/projects" className="text-link">
           Buat project terlebih dahulu
         </Link>
+      )}
+      {balance && <Balance balance={balance} />}
+      {balanceError && <ErrorBox message={balanceError} retry={refreshBalance} />}
+      {balance?.available === 0 && (
+        <p className="form-description">
+          Kuota foto tidak mencukupi untuk membuat QR baru. Kurangi alokasi QR lain atau minta
+          tambahan kepada Admin Utama.
+        </p>
       )}
       <div className="summary-strip">
         <span>
@@ -928,7 +1000,14 @@ function QrManagement({ csrf }: { csrf: string }) {
         </span>
         <span>
           <Camera size={18} />
-          <strong>{number(qrs.reduce((a, q) => a + q.total_limit, 0))}</strong> total kuota foto
+          <strong>
+            {formatLimit(
+              qrs.some((q) => q.total_limit === null)
+                ? null
+                : qrs.reduce((a, q) => a + (q.total_limit ?? 0), 0),
+            )}
+          </strong>{' '}
+          total kuota QR
         </span>
       </div>
       <section className="panel">
@@ -973,6 +1052,7 @@ function QrManagement({ csrf }: { csrf: string }) {
                           <small>
                             {q.project_name} · {q.username}
                           </small>
+                          <small>Pembuat: {q.creator_name}</small>
                           <small className="code-label">{q.code.slice(0, 14)}…</small>
                         </span>
                       </button>
@@ -985,14 +1065,14 @@ function QrManagement({ csrf }: { csrf: string }) {
                       <small className="table-sub">foto / tamu</small>
                     </td>
                     <td>
-                      {number(q.max_sessions)}
+                      {formatLimit(q.max_sessions)}
                       <small className="table-sub">{q.allocated_sessions} teralokasi</small>
                     </td>
                     <td>
                       <button
                         className="plain-button"
                         onClick={() => void toggle(q)}
-                        disabled={busy === q.id}
+                        disabled={busy === q.id || (!superAdmin && q.creator_role === 'super')}
                         title={q.active ? 'Nonaktifkan QR' : 'Aktifkan QR'}
                       >
                         <Status active={q.active} />
@@ -1019,7 +1099,7 @@ function QrManagement({ csrf }: { csrf: string }) {
                           className="icon-btn"
                           aria-label={`Edit QR ${q.label}`}
                           onClick={() => setEditor(q)}
-                          disabled={busy === q.id}
+                          disabled={busy === q.id || (!superAdmin && q.creator_role === 'super')}
                         >
                           <Pencil size={15} />
                         </button>
@@ -1027,7 +1107,7 @@ function QrManagement({ csrf }: { csrf: string }) {
                           className="icon-btn danger-icon"
                           aria-label={`Hapus QR ${q.label}`}
                           onClick={() => void remove(q)}
-                          disabled={busy === q.id}
+                          disabled={busy === q.id || (!superAdmin && q.creator_role === 'super')}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -1051,7 +1131,7 @@ function QrManagement({ csrf }: { csrf: string }) {
               !search && (
                 <button
                   className="btn btn-primary btn-small"
-                  disabled={!projects.length}
+                  disabled={!canCreate}
                   onClick={() => setEditor('new')}
                 >
                   <Plus size={16} /> Buat QR code
@@ -1078,15 +1158,16 @@ function QrManagement({ csrf }: { csrf: string }) {
           </p>
         </div>
       </div>
-      {editor && (
+      {editor && balance && (
         <QrEditor
           qr={editor === 'new' ? undefined : editor}
           csrf={csrf}
+          balance={balance}
+          refreshBalance={refreshBalance}
           onClose={() => setEditor(null)}
           onSaved={() => {
             setEditor(null);
-            void load();
-            void reload().catch((e) => toast(e.message, true));
+            void refresh();
           }}
         />
       )}{' '}
@@ -1094,13 +1175,18 @@ function QrManagement({ csrf }: { csrf: string }) {
     </>
   );
 }
+type QrBudget = AccountQuota & { default_total: number; default_per: number };
 function QrEditor({
   qr,
+  balance,
+  refreshBalance,
   csrf,
   onClose,
   onSaved,
 }: {
   qr?: Qr;
+  balance: QrBudget;
+  refreshBalance: () => void;
   csrf: string;
   onClose: () => void;
   onSaved: () => void;
@@ -1109,8 +1195,13 @@ function QrEditor({
   const [project, setProject] = useState(qr?.project_id || current?.id || ''),
     [code, setCode] = useState('');
   const [label, setLabel] = useState(qr?.label || ''),
-    [total, setTotal] = useState(qr?.total_limit || 100),
-    [per, setPer] = useState(qr?.per_session_limit || 2),
+    [total, setTotal] = useState(
+      qr?.total_limit ?? Math.min(balance.available ?? Infinity, balance.default_total),
+    ),
+    [per, setPer] = useState(
+      qr?.per_session_limit ?? Math.min(balance.available ?? Infinity, balance.default_per),
+    ),
+    [unlimited, setUnlimited] = useState(qr?.total_limit === null),
     [active, setActive] = useState(qr?.active ?? true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -1127,7 +1218,8 @@ function QrEditor({
           qr ? 'PUT' : 'POST',
           {
             label,
-            ...(superAdmin ? { total_limit: total, per_session_limit: per } : {}),
+            total_limit: unlimited ? null : total,
+            per_session_limit: per,
             ...(!qr ? { project_id: project, code } : {}),
             active,
           },
@@ -1138,6 +1230,7 @@ function QrEditor({
       onSaved();
     } catch (e) {
       setError((e as Error).message);
+      refreshBalance();
     } finally {
       setBusy(false);
     }
@@ -1181,54 +1274,77 @@ function QrEditor({
           placeholder="Contoh: Main wedding booth"
           autoFocus
         />
-        {superAdmin && (
-          <>
-            <div className="form-grid">
-              <div>
-                <label htmlFor="qr-total">Total photo limit</label>
-                <input
-                  id="qr-total"
-                  type="number"
-                  min={1}
-                  max={1000000}
-                  value={total || ''}
-                  onChange={(e) => setTotal(Number(e.target.value))}
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="qr-per">Photo limit per session</label>
-                <input
-                  id="qr-per"
-                  type="number"
-                  min={1}
-                  max={Math.max(1, total)}
-                  value={per || ''}
-                  onChange={(e) => setPer(Number(e.target.value))}
-                  required
-                  disabled={Boolean(qr?.sessions)}
-                />
-              </div>
+        <>
+          {superAdmin && (!qr || qr.creator_role === 'super') && (
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={unlimited}
+                onChange={(e) => setUnlimited(e.target.checked)}
+              />
+              Tanpa batas total foto
+            </label>
+          )}
+          <div className="form-grid">
+            <div>
+              <label htmlFor="qr-total">Alokasi foto untuk QR</label>
+              <input
+                id="qr-total"
+                type="number"
+                min={Math.max(1, qr?.used_count ?? 0, (qr?.allocated_sessions ?? 0) * per)}
+                disabled={unlimited}
+                max={
+                  balance?.available != null
+                    ? balance.available + (qr?.total_limit ?? 0)
+                    : undefined
+                }
+                value={total || ''}
+                onChange={(e) => setTotal(Number(e.target.value))}
+                required
+              />
             </div>
-            <div className="quota-calculator">
-              <Users size={21} />
-              <div>
-                <strong>
-                  {per > 0 && total >= per ? number(Math.floor(total / per)) : 0} sesi pengunjung
-                </strong>
-                <span>
-                  {per > 0 ? total % per : 0} foto tidak teralokasi · {per || 0} foto per sesi
-                </span>
-              </div>
+            <div>
+              <label htmlFor="qr-per">Batas foto per sesi</label>
+              <input
+                id="qr-per"
+                type="number"
+                min={1}
+                max={unlimited ? undefined : Math.max(1, total)}
+                value={per || ''}
+                onChange={(e) => setPer(Number(e.target.value))}
+                required
+                disabled={Boolean(qr?.sessions)}
+              />
             </div>
-            {Boolean(qr?.sessions) && (
-              <p className="form-hint">
-                Kuota per sesi dikunci karena QR sudah memiliki riwayat penggunaan.
-              </p>
-            )}
-          </>
+          </div>
+          <div className="quota-calculator">
+            <Users size={21} />
+            <div>
+              <strong>
+                {unlimited
+                  ? 'Tanpa batas jumlah'
+                  : per > 0 && total >= per
+                    ? number(Math.floor(total / per))
+                    : 0}{' '}
+                sesi pengunjung
+              </strong>
+              <span>
+                {!unlimited && `${per > 0 ? total % per : 0} foto tidak teralokasi · `}
+                {per || 0} foto per sesi
+              </span>
+            </div>
+          </div>
+          {Boolean(qr?.sessions) && (
+            <p className="form-hint">
+              Kuota per sesi dikunci karena QR sudah memiliki riwayat penggunaan.
+            </p>
+          )}
+        </>
+        {balance?.available != null && (
+          <p className="form-description">
+            Maksimal alokasi QR ini: {number(balance.available + (qr?.total_limit ?? 0))} foto.
+          </p>
         )}
-        {!superAdmin && <p className="form-hint">Kuota QR ditentukan oleh Admin Utama.</p>}
         <label className="checkbox-label">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />{' '}
           Aktifkan QR code untuk tamu
@@ -1265,7 +1381,7 @@ function QrDetail({ qr, onClose }: { qr: Qr; onClose: () => void }) {
         </div>
         <Status active={qr.active} />
         <p>
-          {qr.per_session_limit} foto per sesi · {number(qr.total_limit)} total foto
+          {qr.per_session_limit} foto per sesi · Kuota total: {formatLimit(qr.total_limit)}
         </p>
         <label htmlFor="qr-url">Tautan photo booth</label>
         <div className="copy-field">
@@ -1296,10 +1412,10 @@ function QrDetail({ qr, onClose }: { qr: Qr; onClose: () => void }) {
         </div>
         <div className="qr-detail-stats">
           <span>
-            <strong>{qr.max_sessions}</strong>maksimal sesi
+            <strong>{formatLimit(qr.max_sessions)}</strong>maksimal sesi
           </span>
           <span>
-            <strong>{qr.remaining}</strong>foto tersisa
+            <strong>{formatLimit(qr.remaining)}</strong>foto tersisa
           </span>
           <span>
             <strong>{qr.sessions}</strong>sesi tercatat
@@ -1362,7 +1478,7 @@ function PrintQr({ id }: { id: string }) {
 }
 
 function UsagePage() {
-  const { qrs, loading, error } = useQrs(),
+  const { qrs, loading, error } = useQrs(true),
     [selected, setSelected] = useState('');
   const current = selected || qrs[0]?.id;
   return (
@@ -1402,6 +1518,7 @@ function UsagePage() {
             {qrs.map((q) => (
               <option key={q.id} value={q.id}>
                 {q.label}
+                {q.deleted_at ? ' (dihapus)' : ''}
               </option>
             ))}
           </select>
@@ -1445,24 +1562,30 @@ function UsageDetail({ id }: { id: string }) {
       <div className="usage-summary panel">
         <div>
           <h2>
-            {q.label} <Status active={q.active} />
+            {q.label}{' '}
+            {q.deleted_at ? (
+              <span className="status status-inactive">Dihapus</span>
+            ) : (
+              <Status active={q.active} />
+            )}
           </h2>
           <code>{q.code}</code>
           <QuotaBar qr={q} />
         </div>
         <div className="usage-numbers">
           <span>
-            <strong>{number(q.total_limit)}</strong>total kuota
+            <strong>{formatLimit(q.total_limit)}</strong>total kuota
           </span>
           <span>
             <strong>{number(q.used_count)}</strong>foto diambil
           </span>
           <span>
-            <strong>{number(q.remaining)}</strong>foto tersisa
+            <strong>{q.deleted_at && q.remaining === null ? '—' : formatLimit(q.remaining)}</strong>
+            {q.deleted_at ? 'alokasi dilepas' : 'foto tersisa'}
           </span>
           <span>
             <strong>
-              {q.allocated_sessions}/{q.max_sessions}
+              {q.allocated_sessions}/{formatLimit(q.max_sessions)}
             </strong>
             slot teralokasi
           </span>
@@ -1511,7 +1634,9 @@ function UsageDetail({ id }: { id: string }) {
                           ? 'Selesai'
                           : s.status === 'expired'
                             ? 'Kedaluwarsa'
-                            : 'Aktif'}
+                            : q.deleted_at
+                              ? 'Ditutup'
+                              : 'Aktif'}
                       </span>
                     </td>
                     <td>{dateTime(s.expires_at)}</td>

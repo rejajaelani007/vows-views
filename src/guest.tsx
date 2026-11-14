@@ -126,7 +126,9 @@ function Landing() {
     if (!base) return;
     const c = new AbortController();
     api<QrStatus>('/qr/' + base.split('/')[2], { signal: c.signal })
-      .then((q) => setQuota(q.session?.remaining ?? Math.min(q.remaining, q.per_session_limit)))
+      .then((q) =>
+        setQuota(q.session?.remaining ?? Math.min(q.remaining ?? Infinity, q.per_session_limit)),
+      )
       .catch((e) => {
         if (!c.signal.aborted) setPhotoError(e.message);
       });
@@ -671,7 +673,7 @@ function QrAccess() {
 }
 interface QrStatus {
   label: string;
-  remaining: number;
+  remaining: number | null;
   per_session_limit: number;
   session: GuestSession | null;
   path: string;
@@ -684,11 +686,7 @@ function CameraPage() {
   const [filter, setFilter] = useState<FilterName>('Original');
   const { path, go } = useRouter(),
     code = (base || path).split('/')[2];
-  const [qr, setQr] = useState<{
-      label: string;
-      remaining: number;
-      per_session_limit: number;
-    } | null>(null),
+  const [qr, setQr] = useState<QrStatus | null>(null),
     [session, setSession] = useState<GuestSession | null>(null),
     [error, setError] = useState(''),
     [cameraError, setCameraError] = useState(''),
@@ -783,7 +781,7 @@ function CameraPage() {
         if (status.path !== base) throw Error('Undangan tidak ditemukan.');
         setQr(status);
         setSession(status.session);
-        if ((status.session?.remaining ?? status.remaining) <= 0) stop();
+        if ((status.session?.remaining ?? status.remaining ?? Infinity) <= 0) stop();
       } catch (e) {
         if (!c.signal.aborted) {
           setError((e as Error).message);
@@ -998,7 +996,8 @@ function CameraPage() {
       if (mounted.current) setSaving(false);
     }
   }
-  const remaining = session?.remaining ?? Math.min(qr?.remaining ?? 0, qr?.per_session_limit ?? 0);
+  const remaining =
+    session?.remaining ?? Math.min(qr?.remaining ?? Infinity, qr?.per_session_limit ?? 0);
   const exhausted = remaining <= 0;
   return (
     <main className="page camera-page">

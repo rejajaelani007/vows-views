@@ -45,7 +45,7 @@ Akun dengan peran `super` mengelola akun dan kuota. Peran `project` dibatasi ole
 
 ## Alur QR dan kuota
 
-1. Admin membuat QR pada project dengan kode khusus atau token acak 192 bit. URL mengikuti `/:username/:code`. Tautan lama `/camera/:code` tetap membuka kamera project terkait.
+1. Admin atau studio membuat QR pada project dengan kode khusus atau token acak 192 bit. Alokasi dibebankan pada pembuat QR. Server memeriksa saldo dan menyimpan perubahan dalam satu transaksi tulis. Admin dapat memilih total tanpa batas (NULL), dengan kuota per sesi tetap berlaku. URL mengikuti `/:username/:code`. Tautan lama `/camera/:code` tetap membuka kamera project terkait.
 2. API memvalidasi QR dan membuat/melanjutkan cookie sesi HttpOnly 24 jam.
 3. Kapasitas sesi = floor(total_limit / per_session_limit). Sisa pembagian
    ditampilkan sebagai kuota tidak teralokasi. Pembukaan sesi tidak memakai kuota
@@ -66,8 +66,7 @@ Akun dengan peran `super` mengelola akun dan kuota. Peran `project` dibatasi ole
    mengembalikan kuota yang sudah digunakan.
 
 Limit per sesi tidak dapat diubah setelah ada sesi. Total dapat diubah bila tetap
-menampung seluruh slot yang sudah dialokasikan. QR dengan riwayat sesi tidak dapat
-dihapus; nonaktifkan untuk mempertahankan audit. Token cookie yang hilang dianggap
+menampung seluruh slot yang sudah dialokasikan. Penghapusan QR dengan riwayat membuatnya nonaktif permanen. Perhitungan saldo akun mengganti alokasi QR tersebut dengan jumlah foto terpakai. Token cookie yang hilang dianggap
 sesi baru; sistem anonim berbasis QR bukan verifikasi identitas orang.
 
 ## Keamanan dan operasional

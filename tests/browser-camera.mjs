@@ -43,7 +43,7 @@ try {
     .run();
   await db
     .prepare(
-      "INSERT INTO qr_codes(id,project_id,label,code,total_limit,per_session_limit) VALUES(?,'p','Acara','akad',11,11)",
+      "INSERT INTO qr_codes(id,project_id,label,code,total_limit,per_session_limit,created_by) VALUES(?,'p','Acara','akad',11,11,(SELECT id FROM admins WHERE role='super' LIMIT 1))",
     )
     .run(id());
   const { createServer } = await import('node:http');
@@ -363,6 +363,38 @@ try {
   await login('root@example.org');
   await click('document.querySelector(\'a[href="/admin/users"]\')');
   await wait("document.querySelector('main table')?.innerText.includes('studio@example.org')");
+  const fill = async (selector, value) =>
+    evaluate(
+      `(()=>{const el=document.querySelector(${JSON.stringify(selector)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));})()`,
+    );
+  await click(
+    "[...document.querySelectorAll('main tr')].find(row=>row.textContent.includes('studio@example.org')).querySelector('button')",
+  );
+  await fill('[role="dialog"] input[type="number"]', '100');
+  await click(button('Simpan akun'));
+  await wait("!document.querySelector('[role=dialog]')");
+  await click(button('Keluar'));
+  await wait("!!document.querySelector('#email')");
+  await login('studio');
+  await click('document.querySelector(\'a[href="/admin/qrs"]\')');
+  for (const name of ['Resepsi A', 'Resepsi B']) {
+    await click(button('Buat QR code'));
+    await wait("!!document.querySelector('#qr-label')");
+    await fill('#qr-label', name);
+    await fill('#qr-total', '50');
+    await fill('#qr-per', '2');
+    await wait("document.querySelector('.quota-calculator')?.textContent.includes('25 sesi')");
+    await click("document.querySelector('.modal-actions .btn-primary')");
+    await wait(
+      `!document.querySelector('[role=dialog]') && document.querySelector('.qr-table')?.textContent.includes(${JSON.stringify(name)})`,
+    );
+  }
+  await wait(
+    "document.querySelector('.admin-page-title button')?.disabled && document.querySelector('[aria-label=\"Saldo kuota akun\"]')?.textContent.includes('Tersedia untuk QR 0')",
+  );
+  console.log(
+    'PASS: admin grants 100 photos, studio creates two 50-photo QR codes, each allows 25 sessions, third allocation blocked.',
+  );
   assert.deepEqual(errors, []);
   console.log(
     'PASS: landing, scoped navigation, 11 camera presets, full-resolution JPEGs, desktop/mobile viewports and exhausted quota after refresh.',
